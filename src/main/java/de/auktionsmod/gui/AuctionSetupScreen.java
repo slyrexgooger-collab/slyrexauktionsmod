@@ -18,9 +18,9 @@ public class AuctionSetupScreen extends Screen {
 	private static final int ROW = 22;
 
 	private final ItemStack stack;
-	private TextFieldWidget startField, incField, buyField, balanceCmdField;
+	private TextFieldWidget startField, incField, buyField;
 	private int durationIdx, snipeIdx;
-	private boolean announce, verify, autoRefund;
+	private boolean announce, autoRefund;
 	private String error;
 	private int top, labelX;
 
@@ -31,7 +31,6 @@ public class AuctionSetupScreen extends Screen {
 		durationIdx = nearest(DURATIONS, c.durationSeconds);
 		snipeIdx = nearest(SNIPES, c.antiSnipeSeconds);
 		announce = c.announceInChat;
-		verify = c.verifyBalance;
 		autoRefund = c.autoRefund;
 	}
 
@@ -62,32 +61,18 @@ public class AuctionSetupScreen extends Screen {
 					b.setMessage(snipeText());
 				}).dimensions(fieldX, y - 1, fw, 20)
 				.tooltip(Tooltip.of(Text.literal("Kommt kurz vor Schluss ein neues Höchstgebot, wird die Restzeit auf diesen Wert verlängert."))).build());
-		y += ROW;
-
-		String prevCmd = balanceCmdField != null ? balanceCmdField.getText() : c.balanceCommand;
-		balanceCmdField = new TextFieldWidget(textRenderer, fieldX, y, fw, 18, Text.literal("Kontostand-Befehl"));
-		balanceCmdField.setMaxLength(64);
-		balanceCmdField.setText(prevCmd);
-		balanceCmdField.setTooltip(Tooltip.of(Text.literal("Befehl ohne / der deinen Kontostand anzeigt, z.B. money, bal, geld")));
-		addDrawableChild(balanceCmdField);
 		y += ROW + 4;
 
-		int tw = 98;
+		int tw = 148;
 		addDrawableChild(ButtonWidget.builder(toggleText("Chat-Ansagen", announce), b -> {
 					announce = !announce;
 					b.setMessage(toggleText("Chat-Ansagen", announce));
 				}).dimensions(cx - 150, y, tw, 20)
 				.tooltip(Tooltip.of(Text.literal("Start, neue Gebote, Countdown und Gewinner automatisch in den Chat schreiben."))).build());
-		addDrawableChild(ButtonWidget.builder(toggleText("Geld-Prüfung", verify), b -> {
-					verify = !verify;
-					b.setMessage(toggleText("Geld-Prüfung", verify));
-				}).dimensions(cx - 49, y, tw, 20)
-				.tooltip(Tooltip.of(Text.literal("EMPFOHLEN: Jede Zahlung wird mit deinem echten Kontostand abgeglichen. "
-						+ "Nur wenn das Geld wirklich angekommen ist, zählt das Gebot. Gefälschte /msg-Nachrichten werden erkannt."))).build());
-		addDrawableChild(ButtonWidget.builder(toggleText("Auto-Erstatt.", autoRefund), b -> {
+		addDrawableChild(ButtonWidget.builder(toggleText("Auto-Erstattung", autoRefund), b -> {
 					autoRefund = !autoRefund;
-					b.setMessage(toggleText("Auto-Erstatt.", autoRefund));
-				}).dimensions(cx + 52, y, tw, 20)
+					b.setMessage(toggleText("Auto-Erstattung", autoRefund));
+				}).dimensions(cx + 2, y, tw, 20)
 				.tooltip(Tooltip.of(Text.literal("Am Ende automatisch /pay an alle Überbotenen senden. Aus = per Knopf im Übersichtsmenü."))).build());
 		y += ROW + 6;
 
@@ -115,14 +100,11 @@ public class AuctionSetupScreen extends Screen {
 		Double inc = Money.parse(incField.getText());
 		String buyRaw = buyField.getText().trim();
 		Double buy = buyRaw.isEmpty() ? Double.valueOf(0) : Money.parse(buyRaw);
-		String cmd = balanceCmdField.getText().trim();
-		if (cmd.startsWith("/")) cmd = cmd.substring(1);
 
 		if (start == null || start <= 0) { error = "Bitte einen gültigen Startpreis eingeben."; return; }
 		if (inc == null || inc < 0) { error = "Bitte eine gültige Mindesterhöhung eingeben."; return; }
 		if (buy == null || buy < 0) { error = "Ungültiger Sofortkauf-Preis."; return; }
 		if (buy > 0 && buy < start) { error = "Sofortkauf muss größer als der Startpreis sein."; return; }
-		if (verify && cmd.isEmpty()) { error = "Für die Geld-Prüfung wird ein Kontostand-Befehl benötigt."; return; }
 		if (client == null || client.player == null) return;
 
 		AuctionConfig c = AuctionConfig.get();
@@ -132,13 +114,11 @@ public class AuctionSetupScreen extends Screen {
 		c.durationSeconds = DURATIONS[durationIdx];
 		c.antiSnipeSeconds = SNIPES[snipeIdx];
 		c.announceInChat = announce;
-		c.verifyBalance = verify;
 		c.autoRefund = autoRefund;
-		if (!cmd.isEmpty()) c.balanceCommand = cmd;
 		c.save();
 
 		AuctionManager.get().start(stack, new AuctionManager.Settings(start, inc, buy, DURATIONS[durationIdx],
-				SNIPES[snipeIdx], announce, verify, autoRefund));
+				SNIPES[snipeIdx], announce, autoRefund));
 		close();
 	}
 
@@ -146,7 +126,7 @@ public class AuctionSetupScreen extends Screen {
 	public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {
 		super.renderBackground(ctx, mouseX, mouseY, delta);
 		int cx = width / 2;
-		ctx.fill(cx - 158, top - 4, cx + 158, top + 248, 0xC0101018);
+		ctx.fill(cx - 158, top - 4, cx + 158, top + 226, 0xC0101018);
 		ctx.fill(cx - 158, top - 4, cx + 158, top - 3, 0xFFFFAA00);
 	}
 
@@ -161,14 +141,14 @@ public class AuctionSetupScreen extends Screen {
 		ctx.drawTextWithShadow(textRenderer, stack.getCount() + "x " + stack.getName().getString(), labelX + 20, top + 20, 0xFFFFFFFF);
 
 		String[] labels = {"Startpreis (" + AuctionConfig.get().currency + ")", "Mindesterhöhung", "Sofortkauf-Preis",
-				"Dauer", "Anti-Snipe", "Kontostand-Befehl"};
+				"Dauer", "Anti-Snipe"};
 		int y = top + 40;
 		for (String l : labels) {
 			ctx.drawTextWithShadow(textRenderer, l, labelX, y + 5, 0xFFDDDDDD);
 			y += ROW;
 		}
 
-		int bottom = top + 232;
+		int bottom = top + 210;
 		if (error != null) {
 			ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(error), cx, bottom, 0xFFFF5555);
 		} else {

@@ -47,19 +47,6 @@ public class AuctionOverviewScreen extends Screen {
 		java.util.Collections.reverse(pays);
 		int payPages = Math.max(1, (pays.size() + payRows - 1) / payRows);
 		payPage = Math.min(payPage, payPages - 1);
-		for (int i = 0; i < payRows; i++) {
-			int idx = payPage * payRows + i;
-			if (idx >= pays.size()) break;
-			Payment p = pays.get(idx);
-			if (p.status == Payment.Status.UNCLEAR) {
-				int bx = left + payW - 30;
-				int by = listTop + i * ROW;
-				addDrawableChild(ButtonWidget.builder(Text.literal("§a✔"), b -> m.manualDecision(p, true))
-						.dimensions(bx, by, 13, 12).tooltip(Tooltip.of(Text.literal("Als echt bestätigen (Geld ist angekommen)"))).build());
-				addDrawableChild(ButtonWidget.builder(Text.literal("§c✘"), b -> m.manualDecision(p, false))
-						.dimensions(bx + 14, by, 13, 12).tooltip(Tooltip.of(Text.literal("Als Fake ablehnen"))).build());
-			}
-		}
 		if (payPages > 1) {
 			int py = listTop + payRows * ROW + 1;
 			addDrawableChild(ButtonWidget.builder(Text.literal("◀"), b -> { payPage = Math.max(0, payPage - 1); clearAndInit(); })
@@ -94,16 +81,16 @@ public class AuctionOverviewScreen extends Screen {
 
 		// ---- Untere Knoepfe
 		int by = top + panelH - 26;
-		int bw = (panelW - 12 - 9) / 4;
+		int bw = (panelW - 12 - 6) / 3;
 		int x0 = left + 6;
 		AuctionManager.Phase ph = m.phase();
-		if (ph == AuctionManager.Phase.RUNNING || ph == AuctionManager.Phase.STARTING) {
+		if (ph == AuctionManager.Phase.RUNNING) {
 			addDrawableChild(ButtonWidget.builder(Text.literal("§eJetzt beenden"), b -> { m.endNow(); clearAndInit(); })
 					.dimensions(x0, by, bw, 20)
-					.tooltip(Tooltip.of(Text.literal("Beendet die Auktion sofort, der Höchstbietende gewinnt."))).build()).active = ph == AuctionManager.Phase.RUNNING;
+					.tooltip(Tooltip.of(Text.literal("Beendet die Auktion sofort, der Höchstbietende gewinnt."))).build());
 			addDrawableChild(ButtonWidget.builder(Text.literal("§cAbbrechen"), b -> { m.cancel(); clearAndInit(); })
 					.dimensions(x0 + bw + 3, by, bw, 20)
-					.tooltip(Tooltip.of(Text.literal("Niemand gewinnt – alle bestätigten Zahlungen werden per /pay zurückgezahlt."))).build());
+					.tooltip(Tooltip.of(Text.literal("Niemand gewinnt – alle Zahlungen werden per /pay zurückgezahlt."))).build());
 		} else {
 			addDrawableChild(ButtonWidget.builder(Text.literal("§bAlle erstatten"), b -> { m.refundAll(); clearAndInit(); })
 					.dimensions(x0, by, bw, 20)
@@ -113,12 +100,8 @@ public class AuctionOverviewScreen extends Screen {
 					.dimensions(x0 + bw + 3, by, bw, 20)
 					.tooltip(Tooltip.of(Text.literal("Schließt diese Auktion ab. Danach kannst du mit einem Item in der Hand eine neue starten."))).build());
 		}
-		addDrawableChild(ButtonWidget.builder(Text.literal("Kontostand prüfen"), b -> m.checkBalanceManually())
-				.dimensions(x0 + (bw + 3) * 2, by, bw, 20)
-				.tooltip(Tooltip.of(Text.literal("Fragt deinen Kontostand ab und prüft offene Zahlungen."))).build())
-				.active = m.settings() != null && m.settings().verify();
 		addDrawableChild(ButtonWidget.builder(Text.literal("Schließen"), b -> close())
-				.dimensions(x0 + (bw + 3) * 3, by, bw, 20).build());
+				.dimensions(x0 + (bw + 3) * 2, by, bw, 20).build());
 	}
 
 	@Override
@@ -154,8 +137,7 @@ public class AuctionOverviewScreen extends Screen {
 
 		String state;
 		switch (m.phase()) {
-			case STARTING -> state = "§eLese Kontostand…";
-			case RUNNING -> state = m.remainingSeconds() == 0 ? "§ePrüfe letzte Zahlungen…" : "§aLäuft – noch " + Money.time(m.remainingSeconds());
+			case RUNNING -> state = "§aLäuft – noch " + Money.time(m.remainingSeconds());
 			case ENDED -> state = "§6Beendet";
 			case CANCELLED -> state = "§cAbgebrochen";
 			default -> state = "";
@@ -172,19 +154,15 @@ public class AuctionOverviewScreen extends Screen {
 		}
 		ctx.drawTextWithShadow(textRenderer, lead, x, y + 25, 0xFFFFFFFF);
 
-		String right1 = "Erhalten (echt): §a" + Money.fmt(m.totalReceived());
-		String right2 = m.lastBalance() != null ? "Kontostand: §f" + Money.fmt(m.lastBalance()) + (m.isCheckingBalance() ? " §e…" : "")
-				: (m.settings() != null && m.settings().verify() ? "Kontostand: §e…" : "§7Geld-Prüfung aus");
+		String right1 = "Erhalten: §a" + Money.fmt(m.totalReceived());
 		int rx = left + panelW - 8;
 		ctx.drawTextWithShadow(textRenderer, right1, rx - textRenderer.getWidth(right1.replaceAll("§.", "")), y + 1, 0xFFAAAAAA);
-		ctx.drawTextWithShadow(textRenderer, right2, rx - textRenderer.getWidth(right2.replaceAll("§.", "")), y + 11, 0xFFAAAAAA);
 
 		// ---- Zahlungen
 		int px = left + 7;
 		ctx.drawTextWithShadow(textRenderer, "§nZeit", px, listTop - 10, 0xFFFFFFFF);
 		ctx.drawTextWithShadow(textRenderer, "§nSpieler", px + 46, listTop - 10, 0xFFFFFFFF);
 		ctx.drawTextWithShadow(textRenderer, "§nBetrag", px + 128, listTop - 10, 0xFFFFFFFF);
-		ctx.drawTextWithShadow(textRenderer, "§nStatus", px + 190, listTop - 10, 0xFFFFFFFF);
 
 		List<Payment> pays = new ArrayList<>(m.payments());
 		java.util.Collections.reverse(pays);
@@ -198,10 +176,8 @@ public class AuctionOverviewScreen extends Screen {
 			int ry = listTop + i * ROW + 2;
 			ctx.drawTextWithShadow(textRenderer, p.time, px, ry, 0xFF888888);
 			ctx.drawTextWithShadow(textRenderer, textRenderer.trimToWidth(p.player, 80), px + 46, ry, 0xFFFFFFFF);
-			ctx.drawTextWithShadow(textRenderer, textRenderer.trimToWidth(Money.fmt(p.amount), 60), px + 128, ry, p.status.counts() ? 0xFF55FF55 : 0xFFAAAAAA);
-			String st = p.status.label + (p.late ? " §7(spät)" : "") + (p.manual ? " §7(m)" : "");
-			int maxW = payW - (px + 190 - left) - (p.status == Payment.Status.UNCLEAR ? 32 : 4);
-			ctx.drawTextWithShadow(textRenderer, textRenderer.trimToWidth(st, maxW), px + 190, ry, p.status.color);
+			ctx.drawTextWithShadow(textRenderer, textRenderer.trimToWidth(Money.fmt(p.amount), 60), px + 128, ry, 0xFF55FF55);
+			if (p.late) ctx.drawTextWithShadow(textRenderer, "§e(nach Ende)", px + 190, ry, 0xFFFFFFFF);
 		}
 
 		// ---- Bieter
@@ -226,7 +202,7 @@ public class AuctionOverviewScreen extends Screen {
 
 		// ---- Legende
 		ctx.drawTextWithShadow(textRenderer, textRenderer.trimToWidth(
-						"§a✔ Echt§7 = Kontostand gestiegen   §c✘ Fake§7 = Geld kam nie an   §6? Unklar§7 = selbst prüfen", panelW - 12),
+						"§7Nachrichten mit \"flüstert\", \"->\", [MSG] usw. werden nie als Zahlung gezählt.", panelW - 12),
 				left + 6, top + panelH - 38, 0xFFFFFFFF);
 	}
 

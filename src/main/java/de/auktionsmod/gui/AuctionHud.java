@@ -37,10 +37,9 @@ public final class AuctionHud {
 		String state;
 		int stateColor;
 		switch (m.phase()) {
-			case STARTING -> { state = "Lese Kontostand…"; stateColor = 0xFFFFFF55; }
 			case RUNNING -> {
 				long rem = m.remainingSeconds();
-				state = rem == 0 ? "Prüfe letzte Zahlungen…" : "Restzeit: " + Money.time(rem);
+				state = "Restzeit: " + Money.time(rem);
 				stateColor = rem <= 10 ? 0xFFFF5555 : 0xFF55FF55;
 			}
 			case ENDED -> { state = "Beendet"; stateColor = 0xFFFFAA00; }
@@ -61,8 +60,8 @@ public final class AuctionHud {
 			Payment p = pays.get(i);
 			String line = tr.trimToWidth(p.player, 70);
 			ctx.drawTextWithShadow(tr, line, x, ry, 0xFFFFFFFF);
-			ctx.drawTextWithShadow(tr, Money.fmt(p.amount), x + 72, ry, 0xFFFFFFFF);
-			ctx.drawTextWithShadow(tr, p.status.label, x + 132, ry, p.status.color);
+			ctx.drawTextWithShadow(tr, Money.fmt(p.amount), x + 72, ry, 0xFF55FF55);
+			if (p.late) ctx.drawTextWithShadow(tr, "nach Ende", x + 132, ry, 0xFFFFFF55);
 			ry += 10;
 		}
 	}

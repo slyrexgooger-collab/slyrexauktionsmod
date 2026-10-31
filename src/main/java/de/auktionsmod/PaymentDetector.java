@@ -18,7 +18,6 @@ import java.util.regex.PatternSyntaxException;
  *     ("[Steve -> mir]", "Steve: ", "Steve flüstert") – dann passt das Muster nicht.
  *  3. Nachrichten mit typischen Privatnachrichten-Zeichen (->, », :, flüstert ...) werden sofort verworfen.
  *  4. Der Spielername darf nur aus gueltigen Minecraft-Zeichen bestehen.
- *  5. Zusaetzlich (AuctionManager): Abgleich mit dem echten Kontostand per /money.
  */
 public final class PaymentDetector {
 	private static final String PRE = "(?:\\[[A-Za-z0-9 _&+-]{1,24}\\]\\s?)?";
@@ -26,10 +25,9 @@ public final class PaymentDetector {
 	private static final String AMT = "\\$?\\s?(?<amount>[0-9][0-9.,]*\\s?(?:[kKmM]|Mio)?)\\s?(?:\\$|€|Coins?|Taler|Dollar|Euro)?";
 	public static final Pattern VALID_NAME = Pattern.compile("[A-Za-z0-9_]{2,16}");
 	private static final Pattern LOOKS_LIKE_PAYMENT = Pattern.compile(
-			"(?i).*\\d.*(gezahlt|überwiesen|ueberwiesen|erhalten|received|paid you|sent you|hat dir).*");
+			"(?i).*\\d.*(gezahlt|gegeben|überwiesen|ueberwiesen|erhalten|received|paid you|sent you|hat dir).*");
 
 	private static List<Pattern> payment = new ArrayList<>();
-	private static List<Pattern> balance = new ArrayList<>();
 	private static List<String> blocked = new ArrayList<>();
 
 	public record Detected(String player, double amount) {}
@@ -38,7 +36,6 @@ public final class PaymentDetector {
 
 	public static void reload(AuctionConfig cfg) {
 		payment = compile(cfg.paymentPatterns);
-		balance = compile(cfg.balancePatterns);
 		List<String> b = new ArrayList<>();
 		for (String s : cfg.blockedKeywords) if (s != null && !s.isEmpty()) b.add(s.toLowerCase(Locale.ROOT));
 		blocked = b;
@@ -76,22 +73,14 @@ public final class PaymentDetector {
 			if (player == null || amount == null || amount <= 0) continue;
 			if (!VALID_NAME.matcher(player).matches()) continue;
 			// Das Muster selbst darf die gesperrten Zeichen nicht enthalten -> nur ausserhalb pruefen
-			String rest = lower.replace(player.toLowerCase(Locale.ROOT), "");
+			String nameLower = player.toLowerCase(Locale.ROOT);
+			// In einer echten Zahlung steht der Name genau einmal ("[Steve] Steve hat dir ..." = Fake)
+			if (lower.indexOf(nameLower) != lower.lastIndexOf(nameLower)) return null;
+			String rest = lower.replace(nameLower, "");
 			for (String b : blocked) {
 				if (rest.contains(b)) return null;
 			}
 			return new Detected(player, amount);
-		}
-		return null;
-	}
-
-	public static Double matchBalance(String plain) {
-		for (Pattern p : balance) {
-			Matcher m = p.matcher(plain);
-			if (m.matches()) {
-				Double v = Money.parse(group(m, "amount"));
-				if (v != null) return v;
-			}
 		}
 		return null;
 	}

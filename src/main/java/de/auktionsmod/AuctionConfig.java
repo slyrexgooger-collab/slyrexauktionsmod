@@ -27,12 +27,9 @@ public class AuctionConfig {
 	public int durationSeconds = 300;
 	public int antiSnipeSeconds = 15;
 	public boolean announceInChat = true;
-	public boolean verifyBalance = true;
 	public boolean autoRefund = false;
 
 	// ---- Server-spezifisch ----
-	/** Befehl ohne "/", der deinen Kontostand anzeigt (money, bal, balance, geld ...). */
-	public String balanceCommand = "money";
 	/** Befehl ohne "/" fuer Rueckerstattungen. {player} und {amount} werden ersetzt. */
 	public String payCommand = "pay {player} {amount}";
 	/** Wird vor jede Chat-Ansage gesetzt. Beginnt es mit "/", wird ein Befehl gesendet (z.B. "/g "). */
@@ -40,7 +37,6 @@ public class AuctionConfig {
 	public String currency = "$";
 	/** Abstand zwischen zwei Chat-Ansagen in Ticks (20 = 1 Sekunde), schuetzt vor Spam-Kick. */
 	public int announceDelayTicks = 40;
-	public boolean hideBalanceReplies = true;
 	public boolean showHud = true;
 
 	/**
@@ -56,16 +52,10 @@ public class AuctionConfig {
 			"^{PRE}{P} (?:has )?(?:paid|sent) you {AMT}[.!]?$"
 	));
 
-	/** Muster fuer die Antwort auf den Kontostand-Befehl. Gruppe (?&lt;amount&gt;...) noetig. */
-	public List<String> balancePatterns = new ArrayList<>(List.of(
-			"^{PRE}(?:Dein |Your )?(?:Kontostand|Guthaben|Balance|Geld|Money|Konto)(?: beträgt| betraegt| is| von [A-Za-z0-9_]{2,16})?\\s?:?\\s?{AMT}[.!]?$",
-			"^{PRE}Du hast {AMT}[.!]?$",
-			"^{PRE}You have {AMT}[.!]?$"
-	));
-
 	/** Enthaelt eine Nachricht eines dieser Woerter, ist sie garantiert KEINE Zahlung (Private Nachrichten etc.). */
 	public List<String> blockedKeywords = new ArrayList<>(List.of(
-			"->", "→", "»", ":", "flüstert", "fluestert", "whispers", "[msg]", "[pn]", "[privat]", "[me", "-> me", "-> mir"
+			"flüster", "fluester", "whisper", "->", "→", "»", "<-", ":", "[msg]", "msg", "[pn]", "privat", "private",
+			"[me", "-> me", "-> mir", "tell", "nachricht", "message", "an dich", "to you", "sagt", "says"
 	));
 
 	public static AuctionConfig get() {
