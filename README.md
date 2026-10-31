@@ -6,26 +6,43 @@ Die Mod erkennt die Zahlungen, filtert gefälschte Nachrichten (/msg, Flüstern,
 ## Bedienung
 
 1. Item in die Hand nehmen → **Taste `O`** drücken (änderbar unter Optionen → Steuerung → „Auktions-Mod“).
-2. Im Fenster einstellen:
+2. Im Fenster „Neue Auktion“ einstellen – oben rechts steht dein Name als **Auktionator**:
    | Einstellung | Bedeutung |
    |---|---|
-   | Startpreis | Mindestgebot, damit jemand führen kann |
+   | Startpreis | Mindestgebot für das erste Gebot |
    | Mindesterhöhung | Um so viel muss das Höchstgebot überboten werden |
-   | Sofortkauf-Preis | Wer insgesamt so viel zahlt, gewinnt sofort (0 = aus) |
+   | Sofortkauf | Wer insgesamt so viel bietet, gewinnt sofort (0 = aus) |
    | Dauer | 30 Sek. bis 1 Std. |
    | Anti-Snipe | Neues Höchstgebot kurz vor Schluss → Restzeit wird verlängert |
-   | Chat-Ansagen | Start, neue Gebote, Countdown, Gewinner automatisch in den Chat |
-   | Auto-Erstattung | Überbotene bekommen ihr Geld am Ende automatisch per `/pay` zurück |
+   | Chat-Ansagen | Start, neue Gebote, Countdown und Gewinner automatisch in den Chat |
+   | Auto-Erstattung | Ungültige Gebote sofort, Überbotene am Ende automatisch per `/pay` zurückzahlen |
 3. **„Auktion starten“** klicken.
-4. Während der Auktion: Info-Box oben links. Mit `O` öffnest du die **Übersicht**:
-   alle Zahlungen (Zeit, Spieler, Betrag), alle Bieter, Knöpfe zum Beenden/Abbrechen/Erstatten.
-5. Am Ende: Gewinner wird angesagt → **Item an den Gewinner übergeben**. Überbotene per Knopf erstatten
-   (oder automatisch). „Neue Auktion“ schließt die Auktion ab.
+4. Während der Auktion: Info-Box (HUD) mit Restzeit, Auktionator, Höchstgebot und den letzten Geboten.
+   Mit `O` öffnest du die **Übersicht** mit drei Tabs:
+   - **Gebote** – alle gültigen Gebote (Zeit, Spieler, Zahlung, Gesamtgebot)
+   - **Rangliste** – Platzierung aller Bieter, Status (Führt / Überboten / Gewinner)
+   - **Rückzahlungen** – wem du noch Geld schuldest, mit „Erstatten“-Knopf
+5. Am Ende: Item an den Gewinner übergeben, Überbotene erstatten, „Neue Auktion“.
 
 ### Regeln
-- Mehrere Zahlungen eines Spielers werden **addiert** (= sein Gebot).
-- Zahlungen nach dem Ende zählen nicht und werden zur Erstattung vorgemerkt.
+- Gültige Zahlungen eines Spielers werden **addiert** (= sein Gebot).
+- Eine Zahlung ist nur gültig, wenn das Gebot danach das **Mindestgebot** erreicht
+  (Startpreis bzw. Höchstgebot + Mindesterhöhung; der Führende muss mindestens die Mindesterhöhung nachlegen).
+- **Ungültige Zahlungen** (zu niedrig oder nach dem Ende) werden **nicht angezeigt und nicht gezählt** –
+  sie stehen nur unter „Rückzahlungen“, damit du das Geld zurückgeben kannst.
 - Abbrechen = niemand gewinnt, alle bekommen ihr Geld zurück.
+
+## Design anpassen
+
+Knopf **„Design“** im Auktionsfenster oder in der Übersicht – mit Live-Vorschau:
+- **Farbthema**: Gold, Ozean, Smaragd, Rubin, Lavendel, Pink, Eis, Minimal
+- **Eigene Farben** als Hex-Code (Akzent + Hintergrund) und **Deckkraft**
+- **HUD**: Position (5 Ecken/Mitte), Größe (50–200 %), Anzahl Gebote, an/aus, Auktionator an/aus
+- **Chat-Tag** (z.B. `[Auktion]`, `[SlyrexAH]`) und **Währung** (`$`, `€`, ` Coins` …)
+
+In `config/auktionsmod.json` kannst du zusätzlich **alle Chat-Texte** ändern (`msgStart`, `msgNewBid`, `msgEnd` …)
+sowie Text-/Muted-/Grün-/Rot-Farben und den HUD-Abstand (`hudOffsetX`, `hudOffsetY`).
+Platzhalter: `{tag} {seller} {item} {count} {start} {inc} {buynow} {duration} {player} {amount} {paid} {need} {next} {time} {seconds} {leader}`.
 
 ## Wie werden Fake-Zahlungen herausgefiltert?
 
@@ -51,7 +68,6 @@ Alle Zahlungen werden in `.minecraft/auktionsmod/zahlungen.log` protokolliert.
 - `chatPrefix` – z.B. `"/g "` wenn Ansagen in einen bestimmten Chat sollen.
 - `announceDelayTicks` – Abstand zwischen Chat-Ansagen (Spam-Schutz, 20 = 1 Sek.).
 - `blockedKeywords` – Wörter, bei denen eine Nachricht nie als Zahlung zählt.
-- `currency`, `showHud`.
 
 Wird eine echte Zahlung nicht erkannt, schick mir den genauen Text der Zahlungsnachricht deines Servers.
 
