@@ -3,29 +3,33 @@ package de.auktionsmod.gui;
 import de.auktionsmod.AuctionConfig;
 import de.auktionsmod.AuctionManager;
 import de.auktionsmod.Money;
+import de.auktionsmod.Theme;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.item.ItemStack;
+import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
+
+import java.util.List;
 
 /** Fenster zum Einstellen und Starten einer Auktion fuer das Item in der Hand. */
 public class AuctionSetupScreen extends Screen {
 	private static final int[] DURATIONS = {30, 60, 120, 180, 300, 600, 900, 1800, 3600};
 	private static final int[] SNIPES = {0, 10, 15, 30, 60};
-	private static final int ROW = 22;
+	private static final int W = 372, H = 232, ROW = 22;
 
 	private final ItemStack stack;
 	private TextFieldWidget startField, incField, buyField;
 	private int durationIdx, snipeIdx;
 	private boolean announce, autoRefund;
 	private String error;
-	private int top, labelX;
+	private int x0, y0;
 
 	public AuctionSetupScreen(ItemStack held) {
-		super(Text.literal("Auktion erstellen"));
+		super(Text.literal("Neue Auktion"));
 		this.stack = held.copy();
 		AuctionConfig c = AuctionConfig.get();
 		durationIdx = nearest(DURATIONS, c.durationSeconds);
@@ -37,49 +41,49 @@ public class AuctionSetupScreen extends Screen {
 	@Override
 	protected void init() {
 		AuctionConfig c = AuctionConfig.get();
-		int cx = width / 2;
-		top = Math.max(4, height / 2 - 122);
-		labelX = cx - 150;
-		int fieldX = cx + 2, fw = 148;
-		int y = top + 40;
+		x0 = (width - W) / 2;
+		y0 = Math.max(4, (height - H) / 2);
+		int cx = x0 + 236, cw = 128;
+		int y = y0 + 26;
 
-		startField = field(fieldX, y, fw, startField, Money.plain(c.startPrice), "z.B. 100 oder 1,5k");
+		startField = field(cx, y, cw, startField, Money.plain(c.startPrice), "z.B. 100 oder 1,5k");
 		y += ROW;
-		incField = field(fieldX, y, fw, incField, Money.plain(c.minIncrement), "z.B. 10");
+		incField = field(cx, y, cw, incField, Money.plain(c.minIncrement), "z.B. 10");
 		y += ROW;
-		buyField = field(fieldX, y, fw, buyField, c.buyNowPrice > 0 ? Money.plain(c.buyNowPrice) : "0", "0 = kein Sofortkauf");
+		buyField = field(cx, y, cw, buyField, c.buyNowPrice > 0 ? Money.plain(c.buyNowPrice) : "0", "0 = aus");
 		y += ROW;
 
 		addDrawableChild(ButtonWidget.builder(durationText(), b -> {
-					durationIdx = (durationIdx + 1) % DURATIONS.length;
-					b.setMessage(durationText());
-				}).dimensions(fieldX, y - 1, fw, 20)
-				.tooltip(Tooltip.of(Text.literal("Klicken zum Ändern"))).build());
+			durationIdx = (durationIdx + 1) % DURATIONS.length;
+			b.setMessage(durationText());
+		}).dimensions(cx, y - 1, cw, 20).tooltip(Tooltip.of(Text.literal("Klicken zum Ändern"))).build());
 		y += ROW;
 		addDrawableChild(ButtonWidget.builder(snipeText(), b -> {
-					snipeIdx = (snipeIdx + 1) % SNIPES.length;
-					b.setMessage(snipeText());
-				}).dimensions(fieldX, y - 1, fw, 20)
-				.tooltip(Tooltip.of(Text.literal("Kommt kurz vor Schluss ein neues Höchstgebot, wird die Restzeit auf diesen Wert verlängert."))).build());
-		y += ROW + 4;
+			snipeIdx = (snipeIdx + 1) % SNIPES.length;
+			b.setMessage(snipeText());
+		}).dimensions(cx, y - 1, cw, 20).tooltip(Tooltip.of(Text.literal(
+				"Kommt kurz vor Schluss ein neues Höchstgebot, wird die Restzeit auf diesen Wert verlängert."))).build());
+		y += ROW;
+		addDrawableChild(ButtonWidget.builder(onOff(announce), b -> {
+			announce = !announce;
+			b.setMessage(onOff(announce));
+		}).dimensions(cx, y - 1, cw, 20).tooltip(Tooltip.of(Text.literal(
+				"Start, neue Gebote, Countdown und Gewinner automatisch in den Chat schreiben."))).build());
+		y += ROW;
+		addDrawableChild(ButtonWidget.builder(onOff(autoRefund), b -> {
+			autoRefund = !autoRefund;
+			b.setMessage(onOff(autoRefund));
+		}).dimensions(cx, y - 1, cw, 20).tooltip(Tooltip.of(Text.literal(
+				"Ungültige Gebote sofort und Überbotene am Ende automatisch per /pay zurückzahlen. Aus = per Knopf im Menü."))).build());
 
-		int tw = 148;
-		addDrawableChild(ButtonWidget.builder(toggleText("Chat-Ansagen", announce), b -> {
-					announce = !announce;
-					b.setMessage(toggleText("Chat-Ansagen", announce));
-				}).dimensions(cx - 150, y, tw, 20)
-				.tooltip(Tooltip.of(Text.literal("Start, neue Gebote, Countdown und Gewinner automatisch in den Chat schreiben."))).build());
-		addDrawableChild(ButtonWidget.builder(toggleText("Auto-Erstattung", autoRefund), b -> {
-					autoRefund = !autoRefund;
-					b.setMessage(toggleText("Auto-Erstattung", autoRefund));
-				}).dimensions(cx + 2, y, tw, 20)
-				.tooltip(Tooltip.of(Text.literal("Am Ende automatisch /pay an alle Überbotenen senden. Aus = per Knopf im Übersichtsmenü."))).build());
-		y += ROW + 6;
-
-		addDrawableChild(ButtonWidget.builder(Text.literal("§a§lAuktion starten"), b -> startAuction())
-				.dimensions(cx - 150, y, 196, 20).build());
+		int by = y0 + H - 26;
+		addDrawableChild(ButtonWidget.builder(Text.literal("Design"), b -> {
+			if (client != null) client.setScreen(new DesignScreen(this));
+		}).dimensions(x0 + 8, by, 80, 20).tooltip(Tooltip.of(Text.literal("Farben, HUD-Position und -Größe anpassen"))).build());
 		addDrawableChild(ButtonWidget.builder(Text.literal("Abbrechen"), b -> close())
-				.dimensions(cx + 50, y, 100, 20).build());
+				.dimensions(x0 + W - 8 - 120 - 4 - 80, by, 80, 20).build());
+		addDrawableChild(ButtonWidget.builder(Text.literal("§lAuktion starten"), b -> startAuction())
+				.dimensions(x0 + W - 8 - 120, by, 120, 20).build());
 
 		setInitialFocus(startField);
 	}
@@ -104,7 +108,7 @@ public class AuctionSetupScreen extends Screen {
 		if (start == null || start <= 0) { error = "Bitte einen gültigen Startpreis eingeben."; return; }
 		if (inc == null || inc < 0) { error = "Bitte eine gültige Mindesterhöhung eingeben."; return; }
 		if (buy == null || buy < 0) { error = "Ungültiger Sofortkauf-Preis."; return; }
-		if (buy > 0 && buy < start) { error = "Sofortkauf muss größer als der Startpreis sein."; return; }
+		if (buy > 0 && buy < start) { error = "Sofortkauf muss mindestens der Startpreis sein."; return; }
 		if (client == null || client.player == null) return;
 
 		AuctionConfig c = AuctionConfig.get();
@@ -125,49 +129,65 @@ public class AuctionSetupScreen extends Screen {
 	@Override
 	public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {
 		super.renderBackground(ctx, mouseX, mouseY, delta);
-		int cx = width / 2;
-		ctx.fill(cx - 158, top - 4, cx + 158, top + 226, 0xC0101018);
-		ctx.fill(cx - 158, top - 4, cx + 158, top - 3, 0xFFFFAA00);
+		Ui.window(ctx, x0, y0, x0 + W, y0 + H);
+		Ui.card(ctx, x0 + 8, y0 + 24, x0 + 128, y0 + H - 32);
+		ctx.fill(x0 + 8, y0 + H - 30, x0 + W - 8, y0 + H - 29, Theme.border());
 	}
 
 	@Override
 	public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
 		super.render(ctx, mouseX, mouseY, delta);
-		int cx = width / 2;
-		ctx.drawCenteredTextWithShadow(textRenderer, Text.literal("§6§lAuktion erstellen"), cx, top + 2, 0xFFFFFFFF);
+		String me = AuctionManager.myName();
 
-		ctx.drawItem(stack, labelX, top + 15);
-		ctx.drawStackOverlay(textRenderer, stack, labelX, top + 15);
-		ctx.drawTextWithShadow(textRenderer, stack.getCount() + "x " + stack.getName().getString(), labelX + 20, top + 20, 0xFFFFFFFF);
+		// Kopfzeile mit Auktionator
+		Ui.text(ctx, textRenderer, "§lNeue Auktion", x0 + 8, y0 + 9, Theme.accent());
+		String sellerLabel = "Auktionator: ";
+		int sx = x0 + W - 8 - textRenderer.getWidth(sellerLabel + me) - 12;
+		Ui.text(ctx, textRenderer, sellerLabel, sx, y0 + 9, Theme.muted());
+		Ui.head(ctx, me, sx + textRenderer.getWidth(sellerLabel), y0 + 8, 9);
+		Ui.text(ctx, textRenderer, me, sx + textRenderer.getWidth(sellerLabel) + 12, y0 + 9, Theme.text());
 
-		String[] labels = {"Startpreis (" + AuctionConfig.get().currency + ")", "Mindesterhöhung", "Sofortkauf-Preis",
-				"Dauer", "Anti-Snipe"};
-		int y = top + 40;
+		// Item-Karte
+		int cardCx = x0 + 68;
+		Ui.bigItem(ctx, stack, cardCx - 24, y0 + 34, 3f);
+		int ty = y0 + 90;
+		List<OrderedText> lines = textRenderer.wrapLines(stack.getName(), 110);
+		for (int i = 0; i < Math.min(3, lines.size()); i++) {
+			ctx.drawCenteredTextWithShadow(textRenderer, lines.get(i), cardCx, ty, Theme.text());
+			ty += 10;
+		}
+		Ui.textCenter(ctx, textRenderer, "Menge: " + stack.getCount(), cardCx, ty + 2, Theme.muted());
+		Ui.textCenter(ctx, textRenderer, "Bieten mit:", cardCx, y0 + H - 58, Theme.muted());
+		Ui.textCenter(ctx, textRenderer, textRenderer.trimToWidth("/pay " + me + " <Betrag>", 114), cardCx, y0 + H - 47, Theme.accent());
+
+		// Beschriftungen
+		String cur = AuctionConfig.get().currency;
+		String[] labels = {"Startpreis (" + cur + ")", "Mindesterhöhung", "Sofortkauf (" + cur + ")",
+				"Dauer", "Anti-Snipe", "Chat-Ansagen", "Auto-Erstattung"};
+		int y = y0 + 26;
 		for (String l : labels) {
-			ctx.drawTextWithShadow(textRenderer, l, labelX, y + 5, 0xFFDDDDDD);
+			Ui.text(ctx, textRenderer, l, x0 + 136, y + 5, Theme.text());
 			y += ROW;
 		}
 
-		int bottom = top + 210;
 		if (error != null) {
-			ctx.drawCenteredTextWithShadow(textRenderer, Text.literal(error), cx, bottom, 0xFFFF5555);
+			Ui.textCenter(ctx, textRenderer, error, x0 + 250, y0 + H - 44, Theme.bad());
 		} else {
-			ctx.drawCenteredTextWithShadow(textRenderer,
-					Text.literal("Spieler bieten mit /pay <dein Name> <Betrag> – Zahlungen werden addiert."), cx, bottom, 0xFF888888);
+			Ui.textCenter(ctx, textRenderer, "Gebote unter dem Mindestgebot zählen nicht.", x0 + 250, y0 + H - 44, Theme.muted());
 		}
 	}
 
 	private Text durationText() {
-		return Text.literal("Dauer: " + Money.duration(DURATIONS[durationIdx]));
+		return Text.literal(Money.duration(DURATIONS[durationIdx]));
 	}
 
 	private Text snipeText() {
 		int s = SNIPES[snipeIdx];
-		return Text.literal(s == 0 ? "Aus" : "Verlängern auf " + s + " Sek.");
+		return Text.literal(s == 0 ? "Aus" : "Auf " + s + " Sek.");
 	}
 
-	private static Text toggleText(String name, boolean on) {
-		return Text.literal(name + ": " + (on ? "§aAN" : "§cAUS"));
+	private static Text onOff(boolean on) {
+		return Text.literal(on ? "§aAN" : "§cAUS");
 	}
 
 	private static int nearest(int[] arr, int value) {

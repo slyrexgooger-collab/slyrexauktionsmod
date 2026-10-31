@@ -4,65 +4,137 @@ import de.auktionsmod.AuctionConfig;
 import de.auktionsmod.AuctionManager;
 import de.auktionsmod.Money;
 import de.auktionsmod.Payment;
+import de.auktionsmod.Theme;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 
+import java.util.ArrayList;
 import java.util.List;
 
-/** Kleine Info-Box oben links, solange eine Auktion laeuft. */
+/** Info-Box waehrend der Auktion. Position, Groesse, Farben und Zeilen sind im Design-Menue einstellbar. */
 public final class AuctionHud {
+	public static final int WIDTH = 180;
+
+	/** Alles, was die Box anzeigt – kommt entweder aus der echten Auktion oder ist eine Vorschau. */
+	public record Model(ItemStack item, String seller, String state, int stateColor, float progress,
+	                    String leader, double leaderBid, double minimum, List<Payment> lines) {}
+
 	private AuctionHud() {}
 
 	public static void render(DrawContext ctx, RenderTickCounter tickCounter) {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		AuctionManager m = AuctionManager.get();
-		if (!AuctionConfig.get().showHud || mc.options.hudHidden || !m.hasSession()) return;
-		if (mc.currentScreen instanceof AuctionOverviewScreen) return;
-		TextRenderer tr = mc.textRenderer;
+		AuctionConfig c = AuctionConfig.get();
+		if (!c.showHud || mc.options.hudHidden || !m.hasSession()) return;
+		if (mc.currentScreen instanceof AuctionOverviewScreen || mc.currentScreen instanceof DesignScreen) return;
 
-		int x = 6, y = 6, w = 195;
-		List<Payment> pays = m.payments();
-		int shown = Math.min(4, pays.size());
-		int h = 46 + shown * 10;
+		Model model = fromManager(m);
+		float scale = Math.max(0.5f, Math.min(2f, c.hudScale / 100f));
+		int w = Math.round(WIDTH * scale);
+		int h = Math.round(height(model) * scale);
+		int sw = ctx.getScaledWindowWidth(), sh = ctx.getScaledWindowHeight();
+		int x, y;
+		switch (Theme.HudPos.of(c.hudPosition)) {
+			case OBEN_MITTE -> { x = (sw - w) / 2 + c.hudOffsetX - 6; y = c.hudOffsetY; }
+			case OBEN_RECHTS -> { x = sw - w - c.hudOffsetX; y = c.hudOffsetY; }
+			case UNTEN_LINKS -> { x = c.hudOffsetX; y = sh - h - c.hudOffsetY; }
+			case UNTEN_RECHTS -> { x = sw - w - c.hudOffsetX; y = sh - h - c.hudOffsetY; }
+			default -> { x = c.hudOffsetX; y = c.hudOffsetY; }
+		}
+		draw(ctx, mc.textRenderer, model, x, y, scale);
+	}
 
-		ctx.fill(x - 3, y - 3, x + w, y + h, 0xA0000000);
-		ctx.fill(x - 3, y - 3, x + w, y - 2, 0xFFFFAA00);
-
-		ctx.drawItem(m.item(), x, y);
-		String title = m.item().getCount() + "x " + m.item().getName().getString();
-		ctx.drawTextWithShadow(tr, tr.trimToWidth(title, w - 24), x + 20, y + 1, 0xFFFFFFFF);
-
+	public static Model fromManager(AuctionManager m) {
 		String state;
-		int stateColor;
+		int color;
 		switch (m.phase()) {
 			case RUNNING -> {
 				long rem = m.remainingSeconds();
-				state = "Restzeit: " + Money.time(rem);
-				stateColor = rem <= 10 ? 0xFFFF5555 : 0xFF55FF55;
+				state = "Noch " + Money.time(rem);
+				color = rem <= 10 ? Theme.bad() : Theme.text();
 			}
-			case ENDED -> { state = "Beendet"; stateColor = 0xFFFFAA00; }
-			case CANCELLED -> { state = "Abgebrochen"; stateColor = 0xFFFF5555; }
-			default -> { state = ""; stateColor = 0xFFFFFFFF; }
+			case ENDED -> { state = "Beendet"; color = Theme.accent(); }
+			case CANCELLED -> { state = "Abgebrochen"; color = Theme.bad(); }
+			default -> { state = ""; color = Theme.text(); }
 		}
-		ctx.drawTextWithShadow(tr, state, x + 20, y + 10, stateColor);
+		String lead = m.phase() == AuctionManager.Phase.ENDED ? m.winnerName() : m.leaderName();
+		return new Model(m.item(), m.seller(), state, color, m.timeFraction(), lead, m.leaderBid(), m.nextMinimum(), m.validBids());
+	}
 
-		String lead;
-		if (m.phase() == AuctionManager.Phase.ENDED && m.winnerName() != null) lead = "Gewinner: " + m.winnerName() + " " + Money.fmt(m.leaderBid());
-		else if (m.leaderName() != null) lead = "Höchstgebot: " + m.leaderName() + " " + Money.fmt(m.leaderBid());
-		else lead = "Noch kein gültiges Gebot";
-		ctx.drawTextWithShadow(tr, tr.trimToWidth(lead, w - 4), x, y + 22, 0xFFFFFF55);
-		ctx.drawTextWithShadow(tr, "Erhalten: " + Money.fmt(m.totalReceived()), x, y + 32, 0xFFAAAAAA);
-
-		int ry = y + 44;
-		for (int i = pays.size() - 1; i >= pays.size() - shown; i--) {
-			Payment p = pays.get(i);
-			String line = tr.trimToWidth(p.player, 70);
-			ctx.drawTextWithShadow(tr, line, x, ry, 0xFFFFFFFF);
-			ctx.drawTextWithShadow(tr, Money.fmt(p.amount), x + 72, ry, 0xFF55FF55);
-			if (p.late) ctx.drawTextWithShadow(tr, "nach Ende", x + 132, ry, 0xFFFFFF55);
-			ry += 10;
+	/** Beispieldaten fuer die Vorschau im Design-Menue. */
+	public static Model preview() {
+		String me = AuctionManager.myName().isEmpty() ? "Du" : AuctionManager.myName();
+		List<Payment> lines = new ArrayList<>();
+		String[][] demo = {{"Alex", "1500"}, {"Steve", "1200"}, {"Alex", "800"}, {"Notch", "500"}, {"Steve", "300"}, {"Bob", "200"}, {"Kim", "150"}, {"Max", "100"}};
+		for (String[] d : demo) {
+			Payment p = new Payment(d[0], Double.parseDouble(d[1]));
+			p.valid = true;
+			p.totalAfter = p.amount;
+			lines.add(p);
 		}
+		return new Model(new ItemStack(Items.DIAMOND_SWORD), me, "Noch 2:31", Theme.text(), 0.6f, "Alex", 1500, 1510, lines);
+	}
+
+	public static int height(Model m) {
+		AuctionConfig c = AuctionConfig.get();
+		int lines = Math.min(Math.max(0, c.hudLines), m.lines().size());
+		int h = c.hudShowSeller ? 62 : 52;
+		if (lines > 0) h += 4 + lines * 10;
+		return h + 4;
+	}
+
+	public static void draw(DrawContext ctx, TextRenderer tr, Model m, int x, int y, float scale) {
+		AuctionConfig c = AuctionConfig.get();
+		ctx.getMatrices().pushMatrix();
+		ctx.getMatrices().translate(x, y);
+		ctx.getMatrices().scale(scale, scale);
+
+		int w = WIDTH, h = height(m);
+		Ui.window(ctx, 0, 0, w, h);
+
+		// Item + Titel
+		Ui.card(ctx, 4, 5, 24, 25);
+		ctx.drawItem(m.item(), 6, 7);
+		String title = (m.item().getCount() > 1 ? m.item().getCount() + "x " : "") + m.item().getName().getString();
+		Ui.text(ctx, tr, tr.trimToWidth(title, w - 34), 29, 6, Theme.accent());
+		Ui.text(ctx, tr, m.state(), 29, 16, m.stateColor());
+		Ui.textRight(ctx, tr, "Min " + Money.fmt(m.minimum()), w - 5, 16, Theme.muted());
+
+		int y0 = 28;
+		Ui.progress(ctx, 4, y0, w - 8, 2, m.progress());
+		y0 += 6;
+
+		if (c.hudShowSeller) {
+			Ui.head(ctx, m.seller(), 5, y0, 8);
+			Ui.text(ctx, tr, "Auktionator: ", 16, y0, Theme.muted());
+			Ui.text(ctx, tr, tr.trimToWidth(m.seller(), w - 90), 16 + tr.getWidth("Auktionator: "), y0, Theme.text());
+			y0 += 10;
+		}
+
+		// Hoechstgebot
+		Ui.card(ctx, 4, y0, w - 4, y0 + 14);
+		if (m.leader() != null) {
+			Ui.head(ctx, m.leader(), 7, y0 + 3, 8);
+			Ui.text(ctx, tr, "★ " + tr.trimToWidth(m.leader(), 80), 18, y0 + 3, Theme.text());
+			Ui.textRight(ctx, tr, Money.fmt(m.leaderBid()), w - 7, y0 + 3, Theme.good());
+		} else {
+			Ui.text(ctx, tr, "Noch kein Gebot", 7, y0 + 3, Theme.muted());
+		}
+		y0 += 18;
+
+		// Letzte gueltige Gebote
+		int lines = Math.min(Math.max(0, c.hudLines), m.lines().size());
+		for (int i = 0; i < lines; i++) {
+			Payment p = m.lines().get(i);
+			Ui.text(ctx, tr, tr.trimToWidth(p.player, 90), 7, y0, i == 0 ? Theme.text() : Theme.muted());
+			Ui.textRight(ctx, tr, Money.fmt(p.totalAfter), w - 7, y0, i == 0 ? Theme.good() : Theme.muted());
+			y0 += 10;
+		}
+
+		ctx.getMatrices().popMatrix();
 	}
 }

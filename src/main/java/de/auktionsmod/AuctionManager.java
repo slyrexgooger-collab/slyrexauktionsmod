@@ -17,10 +17,11 @@ import java.util.*;
 
 /**
  * Ablauf einer Auktion ("Bieten per /pay"):
- *  - Jeder Spieler bietet, indem er dir Geld per /pay schickt. Alle Zahlungen eines Spielers werden addiert = sein Gebot.
- *  - Wer am Ende das hoechste Gesamtgebot hat, gewinnt. Alle anderen bekommen ihr Geld zurueck (Knopf oder automatisch).
- *  - Als Zahlung zaehlen nur Systemnachrichten, die komplett dem Zahlungsformat entsprechen. Alles mit
- *    "flüstert", "->", "[MSG]" usw. (Privatnachrichten) wird verworfen.
+ *  - Spieler bieten, indem sie dem Auktionator Geld per /pay schicken. Gueltige Zahlungen eines Spielers werden addiert.
+ *  - Eine Zahlung ist nur gueltig, wenn das Gesamtgebot danach das Mindestgebot erreicht
+ *    (Startpreis bzw. Hoechstgebot + Mindesterhoehung). Ungueltige Zahlungen werden NICHT angezeigt und
+ *    NICHT gezaehlt – sie landen nur in der Rueckzahlungsliste.
+ *  - Am Ende gewinnt das hoechste Gebot. Alle anderen bekommen ihr Geld zurueck.
  */
 public final class AuctionManager {
 	public enum Phase { IDLE, RUNNING, ENDED, CANCELLED }
@@ -44,63 +45,96 @@ public final class AuctionManager {
 	private Phase phase = Phase.IDLE;
 	private ItemStack item = ItemStack.EMPTY;
 	private Settings settings;
+	private String seller = "";
+	private long startTimeMs;
 	private long endTimeMs;
 	private int revision;
 
 	private final List<Payment> payments = new ArrayList<>();
 	private final Map<String, String> names = new LinkedHashMap<>();
 	private final Map<String, Double> bids = new HashMap<>();
-	private final Map<String, Double> lateMoney = new HashMap<>();
+	private final Map<String, Double> invalidMoney = new HashMap<>();
 	private final Map<String, Double> refunded = new HashMap<>();
 	private String leader;
 	private String winner;
 	private final Set<Integer> announcedMarks = new HashSet<>();
 
-	// Chat-Warteschlange (Spam-Schutz)
 	private final ArrayDeque<Outgoing> outbox = new ArrayDeque<>();
 	private int outboxCooldown;
 	private int fakeWarnCooldown;
 
-	// ------------------------------------------------------------------ Getter fuer GUI/HUD
+	// ================================================================ Getter fuer GUI/HUD
 
 	public Phase phase() { return phase; }
 	public boolean hasSession() { return phase != Phase.IDLE; }
 	public ItemStack item() { return item; }
 	public Settings settings() { return settings; }
+	public String seller() { return seller; }
 	public int revision() { return revision; }
-	public List<Payment> payments() { return Collections.unmodifiableList(payments); }
 
 	public long remainingSeconds() {
 		if (phase != Phase.RUNNING) return 0;
 		return Math.max(0, (endTimeMs - System.currentTimeMillis() + 999) / 1000);
 	}
 
+	/** 1 = gerade gestartet, 0 = vorbei */
+	public float timeFraction() {
+		if (phase != Phase.RUNNING) return 0;
+		long total = Math.max(1, endTimeMs - startTimeMs);
+		return Math.max(0, Math.min(1, (endTimeMs - System.currentTimeMillis()) / (float) total));
+	}
+
 	public String leaderName() { return leader == null ? null : names.get(leader); }
 	public double leaderBid() { return leader == null ? 0 : bids.getOrDefault(leader, 0.0); }
 	public String winnerName() { return winner == null ? null : names.get(winner); }
 	public double bidOf(String k) { return bids.getOrDefault(k, 0.0); }
-	public double lateOf(String k) { return lateMoney.getOrDefault(k, 0.0); }
+	public double invalidOf(String k) { return invalidMoney.getOrDefault(k, 0.0); }
 	public double refundedOf(String k) { return refunded.getOrDefault(k, 0.0); }
 	public String nameOf(String k) { return names.getOrDefault(k, k); }
 	public boolean isWinner(String k) { return k.equals(winner); }
+	public boolean isLeader(String k) { return k.equals(leader); }
 
-	public double totalReceived() {
+	/** Mindestens noetiges Gesamtgebot fuer die Fuehrung. */
+	public double nextMinimum() {
+		if (settings == null) return 0;
+		return leader == null ? settings.startPrice() : leaderBid() + Math.max(settings.minIncrement(), 0.01);
+	}
+
+	/** Nur gueltige Gebote, neueste zuerst. */
+	public List<Payment> validBids() {
+		List<Payment> out = new ArrayList<>();
+		for (int i = payments.size() - 1; i >= 0; i--) if (payments.get(i).valid) out.add(payments.get(i));
+		return out;
+	}
+
+	public double totalValid() {
 		double s = 0;
-		for (Payment p : payments) s += p.amount;
+		for (Payment p : payments) if (p.valid) s += p.amount;
 		return s;
 	}
 
-	/** Alle Spieler, die gezahlt haben, sortiert nach Gebot. */
-	public List<String> bidderKeys() {
-		List<String> list = new ArrayList<>(names.keySet());
-		list.sort((a, b) -> Double.compare(bidOf(b) + lateOf(b), bidOf(a) + lateOf(a)));
+	/** Spieler mit gueltigem Gebot, sortiert nach Gebot. */
+	public List<String> ranking() {
+		List<String> list = new ArrayList<>();
+		for (String k : names.keySet()) if (bidOf(k) > 0) list.add(k);
+		list.sort((a, b) -> Double.compare(bidOf(b), bidOf(a)));
 		return list;
 	}
 
-	/** Wie viel muss diesem Spieler noch zurueckgezahlt werden? */
+	/** Spieler, denen etwas zusteht oder schon erstattet wurde. */
+	public List<String> refundList() {
+		List<String> list = new ArrayList<>();
+		for (String k : names.keySet()) if (refundDue(k) > 0 || refundedOf(k) > 0) list.add(k);
+		list.sort((a, b) -> Double.compare(refundDue(b), refundDue(a)));
+		return list;
+	}
+
+	/** Offener Rueckzahlungsbetrag. Ungueltige Zahlungen sind sofort erstattbar, Gebote erst nach dem Ende. */
 	public double refundDue(String k) {
-		if (phase == Phase.RUNNING) return 0;
-		double due = (k.equals(winner) ? 0 : bidOf(k)) + lateOf(k) - refundedOf(k);
+		double due = invalidOf(k) - refundedOf(k);
+		if (phase == Phase.ENDED || phase == Phase.CANCELLED) {
+			due += k.equals(winner) ? 0 : bidOf(k);
+		}
 		return due > Money.EPS ? due : 0;
 	}
 
@@ -110,25 +144,23 @@ public final class AuctionManager {
 		return s;
 	}
 
-	// ------------------------------------------------------------------ Steuerung
+	// ================================================================ Steuerung
 
 	public void start(ItemStack stack, Settings s) {
 		clear();
 		item = stack.copy();
 		settings = s;
+		seller = myName();
 		phase = Phase.RUNNING;
-		endTimeMs = System.currentTimeMillis() + s.durationSeconds() * 1000L;
-		String me = myName();
-		StringBuilder sb = new StringBuilder("[Auktion] ").append(item.getCount()).append("x ").append(item.getName().getString())
-				.append(" | Start: ").append(Money.fmt(s.startPrice()))
-				.append(" | +min ").append(Money.fmt(s.minIncrement()));
-		if (s.buyNowPrice() > 0) sb.append(" | Sofortkauf: ").append(Money.fmt(s.buyNowPrice()));
-		sb.append(" | Dauer: ").append(Money.duration(s.durationSeconds()))
-				.append(" | Bieten: /pay ").append(me).append(" <Betrag>");
-		announce(sb.toString());
-		announce("[Auktion] Deine Zahlungen werden addiert. Wer nicht gewinnt, bekommt sein Geld zurück.");
-		info(Text.literal("Auktion gestartet!").formatted(Formatting.GREEN));
-		log("START " + item.getCount() + "x " + item.getName().getString() + " " + s);
+		startTimeMs = System.currentTimeMillis();
+		endTimeMs = startTimeMs + s.durationSeconds() * 1000L;
+
+		AuctionConfig c = AuctionConfig.get();
+		String buyPart = s.buyNowPrice() > 0 ? fill(c.msgBuyNowPart, Map.of("amount", Money.fmt(s.buyNowPrice()))) : "";
+		announce(c.msgStart, Map.of("buynow", buyPart));
+		announce(c.msgInfo, Map.of());
+		info(Text.literal("Auktion gestartet! Spieler bieten mit /pay " + seller + " <Betrag>").formatted(Formatting.GREEN));
+		log("START " + seller + ": " + item.getCount() + "x " + item.getName().getString() + " " + s);
 		changed();
 	}
 
@@ -139,20 +171,20 @@ public final class AuctionManager {
 	private void end() {
 		phase = Phase.ENDED;
 		winner = leader;
+		AuctionConfig c = AuctionConfig.get();
 		if (winner != null) {
-			announce("[Auktion] BEENDET! Gewinner: " + nameOf(winner) + " mit " + Money.fmt(bidOf(winner))
-					+ " für " + item.getCount() + "x " + item.getName().getString() + ". Alle anderen bekommen ihr Geld zurück.");
+			announce(c.msgEnd, Map.of("player", nameOf(winner), "amount", Money.fmt(bidOf(winner))));
 			info(Text.literal("Gewinner: ").formatted(Formatting.GOLD)
 					.append(Text.literal(nameOf(winner)).formatted(Formatting.GREEN, Formatting.BOLD))
 					.append(Text.literal(" – " + Money.fmt(bidOf(winner)) + ". Übergib jetzt das Item!").formatted(Formatting.YELLOW)));
 		} else {
-			announce("[Auktion] BEENDET – es gab kein gültiges Gebot.");
+			announce(c.msgEndNoBid, Map.of());
 			info(Text.literal("Auktion ohne gültiges Gebot beendet.").formatted(Formatting.YELLOW));
 		}
 		log("ENDE Gewinner=" + (winner == null ? "-" : nameOf(winner) + " " + Money.command(bidOf(winner))));
 		if (settings.autoRefund()) refundAll();
 		else if (totalRefundDue() > 0) {
-			info(Text.literal("Offene Rückzahlungen: " + Money.fmt(totalRefundDue()) + " – öffne das Menü (O) zum Erstatten.").formatted(Formatting.AQUA));
+			info(Text.literal("Offene Rückzahlungen: " + Money.fmt(totalRefundDue()) + " – Menü öffnen (O) → Rückzahlungen.").formatted(Formatting.AQUA));
 		}
 		changed();
 	}
@@ -163,7 +195,7 @@ public final class AuctionManager {
 		phase = Phase.CANCELLED;
 		leader = null;
 		winner = null;
-		announce("[Auktion] Die Auktion wurde abgebrochen. Alle Gebote werden zurückerstattet.");
+		announce(AuctionConfig.get().msgCancel, Map.of());
 		log("ABBRUCH");
 		refundAll();
 		changed();
@@ -175,7 +207,7 @@ public final class AuctionManager {
 		payments.clear();
 		names.clear();
 		bids.clear();
-		lateMoney.clear();
+		invalidMoney.clear();
 		refunded.clear();
 		leader = null;
 		winner = null;
@@ -201,11 +233,10 @@ public final class AuctionManager {
 		changed();
 	}
 
-	// ------------------------------------------------------------------ Tick
+	// ================================================================ Tick
 
 	public void tick(MinecraftClient client) {
 		if (client.player == null || client.getNetworkHandler() == null) return;
-
 		if (fakeWarnCooldown > 0) fakeWarnCooldown--;
 
 		if (outboxCooldown > 0) outboxCooldown--;
@@ -219,16 +250,16 @@ public final class AuctionManager {
 			long rem = remainingSeconds();
 			for (int mark : COUNTDOWN_MARKS) {
 				if (rem <= mark && rem > mark - 2 && mark < settings.durationSeconds() && announcedMarks.add(mark)) {
-					String lead = leader == null ? "noch kein Gebot (Start " + Money.fmt(settings.startPrice()) + ")"
+					String lead = leader == null ? "Noch kein Gebot (Start " + Money.fmt(settings.startPrice()) + ")"
 							: "Höchstgebot: " + nameOf(leader) + " " + Money.fmt(leaderBid());
-					announce("[Auktion] Noch " + Money.duration(mark) + "! " + lead + " | /pay " + myName() + " <Betrag>");
+					announce(AuctionConfig.get().msgCountdown, Map.of("time", Money.duration(mark), "leader", lead));
 				}
 			}
 			if (System.currentTimeMillis() >= endTimeMs) end();
 		}
 	}
 
-	// ------------------------------------------------------------------ Nachrichten
+	// ================================================================ Nachrichten
 
 	/** Systemnachricht vom Server. */
 	public boolean onGameMessage(Text message, boolean overlay) {
@@ -237,17 +268,16 @@ public final class AuctionManager {
 
 		PaymentDetector.Detected d = PaymentDetector.matchPayment(plain);
 		if (d == null) {
-			if (PaymentDetector.looksLikePayment(plain)) warnFake(plain, "Privatnachricht/Chat, keine echte Zahlung");
+			if (PaymentDetector.looksLikePayment(plain)) warnFake(plain, "Privatnachricht/Chat");
 			return true;
 		}
 		if (key(d.player()).equals(key(myName()))) return true;
 
-		boolean late = phase != Phase.RUNNING;
-		Payment p = new Payment(d.player(), d.amount(), late);
+		Payment p = new Payment(d.player(), d.amount());
 		payments.add(p);
 		names.putIfAbsent(p.key(), d.player());
-		log("ZAHLUNG " + d.player() + " " + Money.command(d.amount()) + (late ? " (nach Ende)" : ""));
 		apply(p);
+		log("ZAHLUNG " + d.player() + " " + Money.command(d.amount()) + (p.valid ? " GÜLTIG" : " UNGÜLTIG"));
 		changed();
 		return true;
 	}
@@ -256,7 +286,7 @@ public final class AuctionManager {
 	public void onPlayerChat(Text message) {
 		if (phase == Phase.IDLE) return;
 		String plain = PaymentDetector.normalize(message.getString());
-		if (PaymentDetector.looksLikePayment(plain)) warnFake(plain, "Spieler-Chatnachricht, keine echte Zahlung");
+		if (PaymentDetector.looksLikePayment(plain)) warnFake(plain, "Spieler-Chat");
 	}
 
 	private void warnFake(String plain, String why) {
@@ -264,50 +294,59 @@ public final class AuctionManager {
 		if (fakeWarnCooldown > 0) return;
 		fakeWarnCooldown = 20;
 		String shortText = plain.length() > 60 ? plain.substring(0, 60) + "…" : plain;
-		info(Text.literal("✘ Ignoriert (" + why + "): ").formatted(Formatting.RED)
+		info(Text.literal("✘ Keine echte Zahlung (" + why + "): ").formatted(Formatting.RED)
 				.append(Text.literal(shortText).formatted(Formatting.GRAY)));
 	}
 
-	// ------------------------------------------------------------------ Gebote
+	// ================================================================ Gebote
 
 	private void apply(Payment p) {
 		String k = p.key();
-		if (p.late) {
-			lateMoney.merge(k, p.amount, Double::sum);
-			info(Text.literal(p.player + " hat nach dem Ende " + Money.fmt(p.amount) + " gezahlt (wird erstattet).").formatted(Formatting.YELLOW));
+		AuctionConfig c = AuctionConfig.get();
+
+		if (phase != Phase.RUNNING) {
+			markInvalid(p, "nach Ende");
 			if (settings.autoRefund() || phase == Phase.CANCELLED) refund(k);
 			return;
 		}
-		double total = bids.merge(k, p.amount, Double::sum);
-		info(Text.literal("+ " + p.player + " zahlte " + Money.fmt(p.amount)).formatted(Formatting.GREEN)
-				.append(Text.literal(" (Gebot gesamt: " + Money.fmt(total) + ")").formatted(Formatting.GRAY)));
 
-		if (settings.buyNowPrice() > 0 && total + Money.EPS >= settings.buyNowPrice()) {
-			leader = k;
-			announce("[Auktion] SOFORTKAUF durch " + p.player + " für " + Money.fmt(total) + "!");
-			end();
+		double prev = bidOf(k);
+		double total = prev + p.amount;
+		boolean buyNow = settings.buyNowPrice() > 0 && total + Money.EPS >= settings.buyNowPrice();
+		double need; // mindestens noetige Einzelzahlung
+		if (leader == null) need = settings.startPrice() - prev;
+		else if (leader.equals(k)) need = Math.max(settings.minIncrement(), 0.01);
+		else need = leaderBid() + Math.max(settings.minIncrement(), 0.01) - prev;
+
+		if (!buyNow && p.amount + Money.EPS < need) {
+			markInvalid(p, "unter Mindestgebot");
+			announce(c.msgInvalid, Map.of("player", p.player, "paid", Money.fmt(p.amount), "need", Money.fmt(need)));
+			if (settings.autoRefund()) refund(k);
 			return;
 		}
 
-		if (leader == null) {
-			if (total + Money.EPS >= settings.startPrice()) newLeader(k, total);
-			else announce("[Auktion] " + p.player + ": " + Money.fmt(total) + " ist unter dem Startgebot. Zahle noch "
-					+ Money.fmt(settings.startPrice() - total) + " dazu.");
-		} else if (leader.equals(k)) {
-			announce("[Auktion] " + p.player + " erhöht auf " + Money.fmt(total) + "!");
-			antiSnipe();
-		} else {
-			double need = leaderBid() + settings.minIncrement();
-			if (total + Money.EPS >= need) newLeader(k, total);
-			else announce("[Auktion] " + p.player + ": " + Money.fmt(total) + " reicht nicht (Höchstgebot " + Money.fmt(leaderBid())
-					+ "). Zahle noch " + Money.fmt(need - total) + " dazu.");
+		p.valid = true;
+		p.totalAfter = total;
+		bids.put(k, total);
+		info(Text.literal("+ " + p.player + " bietet " + Money.fmt(total)).formatted(Formatting.GREEN)
+				.append(Text.literal(" (Zahlung " + Money.fmt(p.amount) + ")").formatted(Formatting.GRAY)));
+
+		boolean wasLeader = k.equals(leader);
+		leader = k;
+		if (buyNow) {
+			announce(c.msgBuyNow, Map.of("player", p.player, "amount", Money.fmt(total)));
+			end();
+			return;
 		}
+		if (wasLeader) announce(c.msgRaise, Map.of("player", p.player, "amount", Money.fmt(total)));
+		else announce(c.msgNewBid, Map.of("player", p.player, "amount", Money.fmt(total)));
+		antiSnipe();
 	}
 
-	private void newLeader(String k, double total) {
-		leader = k;
-		announce("[Auktion] Neues Höchstgebot: " + nameOf(k) + " mit " + Money.fmt(total) + " | noch " + Money.time(remainingSeconds()));
-		antiSnipe();
+	private void markInvalid(Payment p, String why) {
+		p.valid = false;
+		invalidMoney.merge(p.key(), p.amount, Double::sum);
+		info(Text.literal("Ungültig (" + why + "): " + p.player + " " + Money.fmt(p.amount) + " – wird erstattet.").formatted(Formatting.GRAY));
 	}
 
 	private void antiSnipe() {
@@ -317,14 +356,33 @@ public final class AuctionManager {
 		if (endTimeMs < minEnd) {
 			endTimeMs = minEnd;
 			announcedMarks.removeIf(m -> m <= snipe);
-			announce("[Auktion] Verlängert auf " + snipe + " Sekunden (Gebot kurz vor Schluss)!");
+			announce(AuctionConfig.get().msgExtended, Map.of("seconds", Integer.toString(snipe)));
 		}
 	}
 
-	// ------------------------------------------------------------------ Hilfen
+	// ================================================================ Hilfen
 
-	private void announce(String text) {
-		if (settings == null || !settings.announce()) return;
+	/** Ersetzt Platzhalter: erst die uebergebenen, dann die allgemeinen. */
+	private String fill(String template, Map<String, String> vars) {
+		if (template == null) return "";
+		String s = template;
+		for (Map.Entry<String, String> e : vars.entrySet()) s = s.replace("{" + e.getKey() + "}", e.getValue());
+		AuctionConfig c = AuctionConfig.get();
+		s = s.replace("{tag}", c.chatTag == null ? "" : c.chatTag)
+				.replace("{seller}", seller)
+				.replace("{item}", item.isEmpty() ? "" : item.getName().getString())
+				.replace("{count}", Integer.toString(item.getCount()))
+				.replace("{time}", Money.time(remainingSeconds()))
+				.replace("{duration}", settings == null ? "" : Money.duration(settings.durationSeconds()))
+				.replace("{start}", settings == null ? "" : Money.fmt(settings.startPrice()))
+				.replace("{inc}", settings == null ? "" : Money.fmt(settings.minIncrement()))
+				.replace("{next}", Money.fmt(nextMinimum()));
+		return s.trim();
+	}
+
+	private void announce(String template, Map<String, String> vars) {
+		if (settings == null || !settings.announce() || template == null || template.isBlank()) return;
+		String text = fill(template, vars);
 		String prefix = AuctionConfig.get().chatPrefix == null ? "" : AuctionConfig.get().chatPrefix;
 		if (prefix.startsWith("/")) outbox.add(new Outgoing(prefix.substring(1) + text, true));
 		else outbox.add(new Outgoing(prefix + text, false));
@@ -341,11 +399,12 @@ public final class AuctionManager {
 	public static void info(Text text) {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (mc.inGameHud == null) return;
-		MutableText msg = Text.literal("[Auktion] ").formatted(Formatting.GOLD).append(text);
+		String tag = AuctionConfig.get().chatTag == null ? "" : AuctionConfig.get().chatTag;
+		MutableText msg = Text.literal(tag + " ").styled(s -> s.withColor(Theme.accentRgb())).append(text);
 		mc.inGameHud.getChatHud().addMessage(msg);
 	}
 
-	private String myName() {
+	public static String myName() {
 		MinecraftClient mc = MinecraftClient.getInstance();
 		return mc.player != null ? mc.player.getName().getString() : "";
 	}

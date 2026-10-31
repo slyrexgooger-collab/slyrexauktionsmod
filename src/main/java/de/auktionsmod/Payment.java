@@ -9,13 +9,14 @@ public class Payment {
 	public final String player;
 	public final double amount;
 	public final String time = LocalTime.now().format(TIME);
-	/** Nach dem Ende der Auktion eingegangen -> zaehlt nicht als Gebot, wird erstattet */
-	public final boolean late;
+	/** Gueltiges Gebot? Ungueltige (unter Mindestgebot, nach Ende) werden nicht angezeigt/gezaehlt, nur erstattet. */
+	public boolean valid;
+	/** Gesamtgebot des Spielers nach dieser Zahlung (nur bei gueltigen) */
+	public double totalAfter;
 
-	public Payment(String player, double amount, boolean late) {
+	public Payment(String player, double amount) {
 		this.player = player;
 		this.amount = amount;
-		this.late = late;
 	}
 
 	public String key() {

@@ -15,7 +15,19 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
       - name: Bauen
-        run: chmod +x gradlew && ./gradlew build --stacktrace
+        shell: bash
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew build 2>&1 | tee build.log
+      - name: Fehlerprotokoll veröffentlichen
+        if: failure()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-log
+          name: Letztes Bau-Protokoll
+          files: build.log
+          prerelease: true
       - name: Jar als Artefakt hochladen
         uses: actions/upload-artifact@v4
         with:
