@@ -1,4 +1,4 @@
-# Auktions-Mod (Fabric, Minecraft 1.21.11, nur Client)
+# Auktions-Mod (Fabric, nur Client) – Minecraft 1.21.11, 26.1, 26.2, 26.3
 
 Versteigere das Item in deiner Hand. Spieler bieten mit **`/pay <dein Name> <Betrag>`**.
 Die Mod erkennt die Zahlungen, filtert gefälschte Nachrichten (/msg, Flüstern, Chat) heraus und zeigt alles an.
@@ -77,13 +77,36 @@ Alle Zahlungen werden in `.minecraft/auktionsmod/zahlungen.log` protokolliert.
 
 Wird eine echte Zahlung nicht erkannt, schick mir den genauen Text der Zahlungsnachricht deines Servers.
 
+## Versionen
+
+| Minecraft | Datei | Java | Quellcode |
+|---|---|---|---|
+| 1.21.11 | `auktionsmod-1.0.0.jar` | 21 | `src/` |
+| 26.1 | `auktionsmod-1.0.0+26.1.jar` | 25 | `mc26/` |
+| 26.2 | `auktionsmod-1.0.0+26.2.jar` | 25 | `mc26/` |
+| 26.3 | `auktionsmod-1.0.0+26.3.jar` | 25 | `mc26/` |
+
+Alle Versionen haben exakt die gleichen Funktionen. Ab 26.1 nutzt Minecraft Mojangs eigene Namen
+(z.B. `GuiGraphicsExtractor` statt `DrawContext`), deshalb liegt der Code dafür in `mc26/`.
+Die kleinen Unterschiede zwischen 26.1 und 26.2/26.3 stecken in `mc26/src/compat_26_*/`.
+
+Download aller Dateien: https://github.com/slyrexgooger-collab/slyrexauktionsmod/releases/tag/latest
+
 ## Bauen
 
-Voraussetzung: Java 21 (JDK).
+**1.21.11** – Voraussetzung: Java 21 (JDK).
 
 ```bash
 ./gradlew build          # Linux/macOS
 gradlew.bat build        # Windows
+```
+
+**26.x** – Voraussetzung: Java 25 (JDK), im Ordner `mc26`:
+
+```bash
+./gradlew build -Pminecraft_version=26.1 -Pfabric_api_version=0.145.1+26.1
+./gradlew build -Pminecraft_version=26.2 -Pfabric_api_version=0.161.0+26.2
+./gradlew build -Pminecraft_version=26.3 -Pfabric_api_version=0.165.0+26.3
 ```
 
 Die fertige Mod liegt in `build/libs/auktionsmod-1.0.0.jar` → in `.minecraft/mods/` kopieren.
