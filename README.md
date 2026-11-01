@@ -31,7 +31,7 @@ Die Mod erkennt die Zahlungen, filtert gefälschte Nachrichten (/msg, Flüstern,
 - **Ungültige Zahlungen** (zu niedrig oder nach dem Ende) werden **nicht angezeigt und nicht gezählt** –
   sie stehen nur unter „Rückzahlungen“, damit du das Geld zurückgeben kannst.
 - Abbrechen = niemand gewinnt, alle Zahlungen stehen unter „Rückzahlungen“.
-- Rückzahlungen gehen **nur per Knopf** („Erstatten“ bzw. „Alle erstatten“) – nie automatisch.
+- Rückzahlungen gehen **nur einzeln per „Erstatten“-Knopf** im Tab „Rückzahlungen“ – nie automatisch, kein „Alle erstatten“.
 
 ## Design anpassen
 

@@ -96,31 +96,32 @@ public class AuctionOverviewScreen extends Screen {
 			}
 		}
 
-		// Untere Knoepfe
+		// Untere Knoepfe (Rueckzahlungen nur einzeln im Tab "Rückzahlungen")
 		int by = y0 + h - 26;
-		int bw = (w - 16 - 9) / 4;
+		boolean running = m.phase() == AuctionManager.Phase.RUNNING;
+		int count = running ? 4 : 3;
+		int bw = (w - 16 - 3 * (count - 1)) / count;
 		int bx = x0 + 8;
-		if (m.phase() == AuctionManager.Phase.RUNNING) {
+		if (running) {
 			addDrawableChild(ButtonWidget.builder(Text.literal("Jetzt beenden"), b -> { m.endNow(); clearAndInit(); })
 					.dimensions(bx, by, bw, 20)
 					.tooltip(Tooltip.of(Text.literal("Beendet die Auktion sofort – das Höchstgebot gewinnt."))).build());
+			bx += bw + 3;
 			addDrawableChild(ButtonWidget.builder(Text.literal("§cAbbrechen"), b -> { m.cancel(); clearAndInit(); })
-					.dimensions(bx + bw + 3, by, bw, 20)
-					.tooltip(Tooltip.of(Text.literal("Niemand gewinnt – danach unter Rückzahlungen alle per Knopf erstatten."))).build());
-		} else {
-			addDrawableChild(ButtonWidget.builder(Text.literal("Alle erstatten"), b -> { m.refundAll(); clearAndInit(); })
 					.dimensions(bx, by, bw, 20)
-					.tooltip(Tooltip.of(Text.literal("Zahlt " + Money.fmt(m.totalRefundDue()) + " per /pay zurück."))).build())
-					.active = m.totalRefundDue() > 0;
+					.tooltip(Tooltip.of(Text.literal("Niemand gewinnt – danach unter Rückzahlungen einzeln erstatten."))).build());
+		} else {
 			addDrawableChild(ButtonWidget.builder(Text.literal("Neue Auktion"), b -> { m.clear(); close(); })
-					.dimensions(bx + bw + 3, by, bw, 20)
+					.dimensions(bx, by, bw, 20)
 					.tooltip(Tooltip.of(Text.literal("Schließt diese Auktion ab. Danach mit einem Item in der Hand O drücken."))).build());
 		}
+		bx += bw + 3;
 		addDrawableChild(ButtonWidget.builder(Text.literal("Design"), b -> {
 			if (client != null) client.setScreen(new DesignScreen(this));
-		}).dimensions(bx + (bw + 3) * 2, by, bw, 20).build());
+		}).dimensions(bx, by, bw, 20).build());
+		bx += bw + 3;
 		addDrawableChild(ButtonWidget.builder(Text.literal("Schließen"), b -> close())
-				.dimensions(bx + (bw + 3) * 3, by, bw, 20).build());
+				.dimensions(bx, by, bw, 20).build());
 	}
 
 	@Override

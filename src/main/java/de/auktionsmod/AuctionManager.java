@@ -219,10 +219,6 @@ public final class AuctionManager {
 		changed();
 	}
 
-	public void refundAll() {
-		for (String k : new ArrayList<>(names.keySet())) refund(k);
-	}
-
 	public void refund(String k) {
 		double due = refundDue(k);
 		if (due <= 0) return;
