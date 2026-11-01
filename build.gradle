@@ -29,25 +29,13 @@ tasks.register('probe') {
 			} catch (ignored) {}
 		}
 		def full = [
-			'net.minecraft.client.gui.GuiGraphicsExtractor', 'net.minecraft.client.gui.screens.Screen',
-			'net.minecraft.client.gui.components.EditBox', 'net.minecraft.client.gui.Gui',
-			'net.minecraft.client.gui.components.ChatComponent', 'net.minecraft.client.gui.components.Renderable',
-			'net.minecraft.client.gui.components.events.AbstractContainerEventHandler'
+			'net.minecraft.client.gui.Gui', 'net.minecraft.client.gui.Hud', 'net.minecraft.client.gui.components.EditBox',
+			'net.minecraft.client.gui.components.PlayerFaceExtractor', 'net.minecraft.client.multiplayer.chat.ChatListener',
+			'net.minecraft.client.gui.components.AbstractWidget', 'net.minecraft.client.gui.components.Renderable'
 		]
 		full.each { cls -> out << "\n##### ${cls}\n" << jp(['-protected', '-cp', cp, cls]) }
-		def greps = [
-			['net.minecraft.client.Minecraft', /(?i)screen|gui|chat|hide/],
-			['net.minecraft.client.Options', /(?i)hide|gui/],
-			['net.minecraft.client.player.AbstractClientPlayer', /(?i)skin/],
-			['net.minecraft.world.entity.Entity', /getName|getPlainTextName|getScoreboardName/],
-			['net.minecraft.world.entity.player.Player', /getName|getGameProfile|getPlainTextName/],
-			['net.minecraft.world.entity.LivingEntity', /getMainHandItem/],
-			['com.mojang.blaze3d.platform.InputConstants', /KEY_O;|Type/]
-		]
-		greps.each { g ->
-			out << "\n##### ${g[0]} (grep)\n"
-			jp(['-protected', '-cp', cp, g[0]]).eachLine { if (it =~ g[1]) out << it << "\n" }
-		}
+		out << "\n##### Minecraft (Screen/Gui/Chat)\n"
+		jp(['-public', '-cp', cp, 'net.minecraft.client.Minecraft']).eachLine { if (it =~ /(?i)screen|Gui|chat|options|hud/) out << it << "\n" }
 		file("probe-${project.minecraft_version}.txt").text = out.toString()
 	}
 }
