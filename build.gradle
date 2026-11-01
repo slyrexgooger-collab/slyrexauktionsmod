@@ -1,0 +1,68 @@
+plugins { id 'net.fabricmc.fabric-loom' version "${loom_version}" }
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+}
+tasks.withType(JavaCompile).configureEach { it.options.release = 25 }
+
+tasks.register('probe') {
+	doLast {
+		def files = configurations.compileClasspath.files
+		def cp = files.join(File.pathSeparator)
+		def out = new StringBuilder()
+		out << "===== MINECRAFT ${project.minecraft_version}\n"
+		files.each { out << "JAR ${it.name}\n" }
+		// Fabric-API-Klassen finden
+		def wanted = ~/(?i)(keybind|keymapping|hudelement|vanillahud|clientreceivemessage|clienttickevents|hudrender)/
+		def fabricClasses = []
+		files.findAll { it.name.endsWith('.jar') }.each { f ->
+			try {
+				new java.util.zip.ZipFile(f).withCloseable { z ->
+					z.entries().each { e ->
+						if (e.name.endsWith('.class') && e.name.contains('/api/') && e.name =~ wanted && !e.name.contains('/impl/')) {
+							def cn = e.name.replace('/', '.').replace('.class', '')
+							out << "FAPI ${cn}\n"
+							fabricClasses << cn
+						}
+					}
+				}
+			} catch (ignored) {}
+		}
+		def mc = [
+			'net.minecraft.client.gui.GuiGraphics', 'net.minecraft.client.gui.screens.Screen',
+			'net.minecraft.client.gui.components.Button', 'net.minecraft.client.gui.components.Button$Builder',
+			'net.minecraft.client.gui.components.EditBox', 'net.minecraft.client.gui.components.Tooltip',
+			'net.minecraft.client.gui.components.AbstractWidget', 'net.minecraft.client.KeyMapping',
+			'net.minecraft.client.KeyMapping$Category', 'net.minecraft.client.gui.components.PlayerFaceRenderer',
+			'net.minecraft.client.multiplayer.PlayerInfo', 'net.minecraft.client.multiplayer.ClientPacketListener',
+			'net.minecraft.client.Minecraft', 'net.minecraft.client.gui.Font', 'net.minecraft.network.chat.Component',
+			'net.minecraft.network.chat.MutableComponent', 'net.minecraft.ChatFormatting',
+			'net.minecraft.client.resources.sounds.SimpleSoundInstance', 'net.minecraft.client.gui.components.ChatComponent',
+			'net.minecraft.client.Options', 'net.minecraft.client.DeltaTracker', 'net.minecraft.resources.Identifier',
+			'net.minecraft.resources.ResourceLocation', 'com.mojang.blaze3d.platform.InputConstants',
+			'com.mojang.blaze3d.platform.InputConstants$Type', 'net.minecraft.client.gui.Gui',
+			'net.minecraft.world.item.ItemStack', 'net.minecraft.client.player.LocalPlayer',
+			'net.minecraft.client.sounds.SoundManager', 'net.minecraft.network.chat.Style',
+			'net.minecraft.client.gui.components.events.GuiEventListener', 'net.minecraft.world.entity.player.PlayerSkin',
+			'net.minecraft.client.resources.PlayerSkin', 'net.minecraft.sounds.SoundEvent'
+		] + fabricClasses
+		def javap = "${System.getProperty('java.home')}/bin/javap"
+		mc.each { cls ->
+			def pb = new ProcessBuilder(javap, '-public', '-cp', cp, cls).redirectErrorStream(true)
+			def p = pb.start()
+			def txt = p.inputStream.text
+			p.waitFor()
+			out << "\n##### ${cls}\n" << txt
+		}
+		// SoundEvents nur Toast-Zeilen, Items nur Diamond Sword
+		[['net.minecraft.sounds.SoundEvents', 'TOAST'], ['net.minecraft.world.item.Items', 'DIAMOND_SWORD']].each { pair ->
+			def p = new ProcessBuilder(javap, '-public', '-cp', cp, pair[0]).redirectErrorStream(true).start()
+			def txt = p.inputStream.text
+			p.waitFor()
+			out << "\n##### ${pair[0]} (grep ${pair[1]})\n"
+			txt.eachLine { if (it.contains(pair[1])) out << it << "\n" }
+		}
+		file("probe-${project.minecraft_version}.txt").text = out.toString()
+	}
+}
