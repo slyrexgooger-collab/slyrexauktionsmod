@@ -12,56 +12,41 @@ tasks.register('probe') {
 		def cp = files.join(File.pathSeparator)
 		def out = new StringBuilder()
 		out << "===== MINECRAFT ${project.minecraft_version}\n"
-		files.each { out << "JAR ${it.name}\n" }
-		// Fabric-API-Klassen finden
-		def wanted = ~/(?i)(keybind|keymapping|hudelement|vanillahud|clientreceivemessage|clienttickevents|hudrender)/
-		def fabricClasses = []
-		files.findAll { it.name.endsWith('.jar') }.each { f ->
+		def javap = "${System.getProperty('java.home')}/bin/javap"
+		def run = { List args ->
+			def p = new ProcessBuilder([javap] + args).redirectErrorStream(true).start()
+			def t = p.inputStream.text
+			p.waitFor()
+			t
+		}
+		// Klassen im Minecraft-Jar suchen
+		def wanted = ~/net\/minecraft\/client\/.*(Face|Chat(Component|Hud|Listener)|GuiGraphics|Renderable|PlayerSkin|SkinTexture|HudRender|Gui\$|Options).*\.class/
+		files.findAll { it.name.endsWith('.jar') && it.name.contains('minecraft') }.each { f ->
 			try {
 				new java.util.zip.ZipFile(f).withCloseable { z ->
-					z.entries().each { e ->
-						if (e.name.endsWith('.class') && e.name.contains('/api/') && e.name =~ wanted && !e.name.contains('/impl/')) {
-							def cn = e.name.replace('/', '.').replace('.class', '')
-							out << "FAPI ${cn}\n"
-							fabricClasses << cn
-						}
-					}
+					z.entries().each { e -> if (e.name =~ wanted) out << "CLS ${e.name}\n" }
 				}
 			} catch (ignored) {}
 		}
-		def mc = [
-			'net.minecraft.client.gui.GuiGraphics', 'net.minecraft.client.gui.screens.Screen',
-			'net.minecraft.client.gui.components.Button', 'net.minecraft.client.gui.components.Button$Builder',
-			'net.minecraft.client.gui.components.EditBox', 'net.minecraft.client.gui.components.Tooltip',
-			'net.minecraft.client.gui.components.AbstractWidget', 'net.minecraft.client.KeyMapping',
-			'net.minecraft.client.KeyMapping$Category', 'net.minecraft.client.gui.components.PlayerFaceRenderer',
-			'net.minecraft.client.multiplayer.PlayerInfo', 'net.minecraft.client.multiplayer.ClientPacketListener',
-			'net.minecraft.client.Minecraft', 'net.minecraft.client.gui.Font', 'net.minecraft.network.chat.Component',
-			'net.minecraft.network.chat.MutableComponent', 'net.minecraft.ChatFormatting',
-			'net.minecraft.client.resources.sounds.SimpleSoundInstance', 'net.minecraft.client.gui.components.ChatComponent',
-			'net.minecraft.client.Options', 'net.minecraft.client.DeltaTracker', 'net.minecraft.resources.Identifier',
-			'net.minecraft.resources.ResourceLocation', 'com.mojang.blaze3d.platform.InputConstants',
-			'com.mojang.blaze3d.platform.InputConstants$Type', 'net.minecraft.client.gui.Gui',
-			'net.minecraft.world.item.ItemStack', 'net.minecraft.client.player.LocalPlayer',
-			'net.minecraft.client.sounds.SoundManager', 'net.minecraft.network.chat.Style',
-			'net.minecraft.client.gui.components.events.GuiEventListener', 'net.minecraft.world.entity.player.PlayerSkin',
-			'net.minecraft.client.resources.PlayerSkin', 'net.minecraft.sounds.SoundEvent'
-		] + fabricClasses
-		def javap = "${System.getProperty('java.home')}/bin/javap"
-		mc.each { cls ->
-			def pb = new ProcessBuilder(javap, '-public', '-cp', cp, cls).redirectErrorStream(true)
-			def p = pb.start()
-			def txt = p.inputStream.text
-			p.waitFor()
-			out << "\n##### ${cls}\n" << txt
-		}
-		// SoundEvents nur Toast-Zeilen, Items nur Diamond Sword
-		[['net.minecraft.sounds.SoundEvents', 'TOAST'], ['net.minecraft.world.item.Items', 'DIAMOND_SWORD']].each { pair ->
-			def p = new ProcessBuilder(javap, '-public', '-cp', cp, pair[0]).redirectErrorStream(true).start()
-			def txt = p.inputStream.text
-			p.waitFor()
-			out << "\n##### ${pair[0]} (grep ${pair[1]})\n"
-			txt.eachLine { if (it.contains(pair[1])) out << it << "\n" }
+		def full = [
+			'net.minecraft.client.gui.GuiGraphicsExtractor', 'net.minecraft.client.gui.screens.Screen',
+			'net.minecraft.client.gui.components.EditBox', 'net.minecraft.client.gui.Gui',
+			'net.minecraft.client.gui.components.ChatComponent', 'net.minecraft.client.gui.components.Renderable',
+			'net.minecraft.client.gui.components.events.AbstractContainerEventHandler'
+		]
+		full.each { cls -> out << "\n##### ${cls}\n" << run(['-protected', '-cp', cp, cls]) }
+		def greps = [
+			['net.minecraft.client.Minecraft', /(?i)screen|gui|chat|hide/],
+			['net.minecraft.client.Options', /(?i)hide|gui/],
+			['net.minecraft.client.player.AbstractClientPlayer', /(?i)skin/],
+			['net.minecraft.world.entity.Entity', /getName|getPlainTextName|getScoreboardName/],
+			['net.minecraft.world.entity.player.Player', /getName|getGameProfile|getPlainTextName/],
+			['net.minecraft.world.entity.LivingEntity', /getMainHandItem/],
+			['com.mojang.blaze3d.platform.InputConstants', /KEY_O;|Type/]
+		]
+		greps.each { g ->
+			out << "\n##### ${g[0]} (grep)\n"
+			run(['-protected', '-cp', cp, g[0]]).eachLine { if (it =~ g[1]) out << it << "\n" }
 		}
 		file("probe-${project.minecraft_version}.txt").text = out.toString()
 	}
