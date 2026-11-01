@@ -1,0 +1,48 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+
+// Minecraft 26.x ist nicht mehr verschleiert: Mojangs eigene Namen, keine Mappings noetig.
+def mc = project.minecraft_version
+def mcMinor = mc.tokenize('.')[1] as int          // 26.1 -> 1, 26.2 -> 2, 26.3 -> 3
+def mcFamily = mc.tokenize('.').take(2).join('.')   // 26.1.2 -> 26.1
+
+version = "${project.mod_version}+${mcFamily}"
+group = project.maven_group
+
+base {
+	archivesName = project.archives_base_name
+}
+
+// Kleine Anpassungsschicht je nach Version (Screen/Chat liegen ab 26.2 in Gui/Hud)
+sourceSets {
+	main {
+		java {
+			srcDir(mcMinor >= 2 ? 'src/compat_26_2/java' : 'src/compat_26_1/java')
+		}
+	}
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${mc}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+}
+
+processResources {
+	def props = [version: project.version, minecraft_dep: "~${mcFamily}"]
+	inputs.properties props
+	filesMatching("fabric.mod.json") {
+		expand props
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+	it.options.encoding = 'UTF-8'
+}
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}

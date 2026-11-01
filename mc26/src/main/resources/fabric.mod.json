@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "auktionsmod",
+  "version": "${version}",
+  "name": "Auktions-Mod",
+  "description": "Auktionen per /pay: Item in die Hand nehmen, Taste O drücken, Einstellungen wählen, starten. Fake-Zahlungen per /msg werden herausgefiltert.",
+  "authors": ["slyrex"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["de.auktionsmod.AuktionsMod"]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.0",
+    "minecraft": "${minecraft_dep}",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}

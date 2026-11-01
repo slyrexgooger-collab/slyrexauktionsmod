@@ -40,7 +40,71 @@ jobs:
           tag_name: latest
           name: Auktions-Mod (neueste Version)
           body: |
-            Fertige Mod für Minecraft 1.21.11 (Fabric).
-            `auktionsmod-1.0.0.jar` herunterladen und in `.minecraft/mods` legen (Fabric API wird benötigt).
+            Fertige Mod (Fabric) – nimm die Datei, die zu deiner Minecraft-Version passt:
+
+            | Minecraft | Datei |
+            |---|---|
+            | 1.21.11 | `auktionsmod-1.0.0.jar` |
+            | 26.1 | `auktionsmod-1.0.0+26.1.jar` |
+            | 26.2 | `auktionsmod-1.0.0+26.2.jar` |
+            | 26.3 | `auktionsmod-1.0.0+26.3.jar` |
+
+            In `.minecraft/mods` legen, zusammen mit der passenden Fabric API.
           files: build/libs/auktionsmod-1.0.0.jar
           make_latest: true
+
+  build-26:
+    name: Minecraft ${{ matrix.mc }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mc: "26.1"
+            fapi: "0.145.1+26.1"
+          - mc: "26.2"
+            fapi: "0.161.0+26.2"
+          - mc: "26.3"
+            fapi: "0.165.0+26.3"
+    defaults:
+      run:
+        working-directory: mc26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Bauen für ${{ matrix.mc }}
+        shell: bash
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew build -Pminecraft_version=${{ matrix.mc }} -Pfabric_api_version=${{ matrix.fapi }} 2>&1 | tee build.log
+      - name: Fehler anzeigen
+        if: failure()
+        shell: bash
+        run: |
+          cp build.log build-${{ matrix.mc }}.log || true
+          grep -E "\.java:[0-9]+: error" build.log | head -10 | while read -r l; do echo "::error::$l"; done || true
+      - name: Fehlerprotokoll veröffentlichen
+        if: failure()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-log
+          name: Letztes Bau-Protokoll
+          files: mc26/build-${{ matrix.mc }}.log
+          prerelease: true
+      - name: Jar als Artefakt hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: auktionsmod-${{ matrix.mc }}
+          path: mc26/build/libs/auktionsmod-*.jar
+      - name: Download-Release ergänzen
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          files: mc26/build/libs/auktionsmod-1.0.0+${{ matrix.mc }}.jar
