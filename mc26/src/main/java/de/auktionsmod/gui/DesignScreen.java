@@ -2,11 +2,11 @@ package de.auktionsmod.gui;
 
 import de.auktionsmod.AuctionConfig;
 import de.auktionsmod.Theme;
-import net.minecraft.minecraft.gui.GuiGraphicsExtractor;
-import net.minecraft.minecraft.gui.screens.Screen;
-import net.minecraft.minecraft.gui.components.Tooltip;
-import net.minecraft.minecraft.gui.components.Button;
-import net.minecraft.minecraft.gui.components.EditBox;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import de.auktionsmod.compat.Compat;
 import net.minecraft.network.chat.Component;
 

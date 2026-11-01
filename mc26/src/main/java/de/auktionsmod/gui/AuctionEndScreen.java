@@ -4,9 +4,9 @@ import de.auktionsmod.AuctionManager;
 import de.auktionsmod.Money;
 import de.auktionsmod.Payment;
 import de.auktionsmod.Theme;
-import net.minecraft.minecraft.gui.GuiGraphicsExtractor;
-import net.minecraft.minecraft.gui.components.Tooltip;
-import net.minecraft.minecraft.gui.components.Button;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Tooltip;
+import net.minecraft.client.gui.components.Button;
 import de.auktionsmod.compat.Compat;
 import net.minecraft.network.chat.Component;
 
