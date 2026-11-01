@@ -15,14 +15,14 @@ Die Mod erkennt die Zahlungen, filtert gefälschte Nachrichten (/msg, Flüstern,
    | Dauer | 30 Sek. bis 1 Std. |
    | Anti-Snipe | Neues Höchstgebot kurz vor Schluss → Restzeit wird verlängert |
    | Chat-Ansagen | Start, neue Gebote, Countdown und Gewinner automatisch in den Chat |
-   | Auto-Erstattung | Ungültige Gebote sofort, Überbotene am Ende automatisch per `/pay` zurückzahlen |
 3. **„Auktion starten“** klicken.
 4. Während der Auktion: Info-Box (HUD) mit Restzeit, Auktionator, Höchstgebot und den letzten Geboten.
    Mit `O` öffnest du die **Übersicht** mit drei Tabs:
    - **Gebote** – alle gültigen Gebote (Zeit, Spieler, Zahlung, Gesamtgebot)
    - **Rangliste** – Platzierung aller Bieter, Status (Führt / Überboten / Gewinner)
    - **Rückzahlungen** – wem du noch Geld schuldest, mit „Erstatten“-Knopf
-5. Am Ende: Item an den Gewinner übergeben, Überbotene erstatten, „Neue Auktion“.
+5. Am Ende erscheint eine **Gewinner-Animation** (Konfetti + Banner mit Kopf, Name und Betrag).
+   Dann Item an den Gewinner übergeben, unter „Rückzahlungen“ die Überbotenen per Knopf erstatten, „Neue Auktion“.
 
 ### Regeln
 - Gültige Zahlungen eines Spielers werden **addiert** (= sein Gebot).
@@ -30,7 +30,8 @@ Die Mod erkennt die Zahlungen, filtert gefälschte Nachrichten (/msg, Flüstern,
   (Startpreis bzw. Höchstgebot + Mindesterhöhung; der Führende muss mindestens die Mindesterhöhung nachlegen).
 - **Ungültige Zahlungen** (zu niedrig oder nach dem Ende) werden **nicht angezeigt und nicht gezählt** –
   sie stehen nur unter „Rückzahlungen“, damit du das Geld zurückgeben kannst.
-- Abbrechen = niemand gewinnt, alle bekommen ihr Geld zurück.
+- Abbrechen = niemand gewinnt, alle Zahlungen stehen unter „Rückzahlungen“.
+- Rückzahlungen gehen **nur per Knopf** („Erstatten“ bzw. „Alle erstatten“) – nie automatisch.
 
 ## Design anpassen
 
@@ -38,6 +39,7 @@ Knopf **„Design“** im Auktionsfenster oder in der Übersicht – mit Live-Vo
 - **Farbthema**: Gold, Ozean, Smaragd, Rubin, Lavendel, Pink, Eis, Minimal
 - **Eigene Farben** als Hex-Code (Akzent + Hintergrund) und **Deckkraft**
 - **HUD**: Position (5 Ecken/Mitte), Größe (50–200 %), Anzahl Gebote, an/aus, Auktionator an/aus
+- **Gewinn-Effekt**: Animation und Sound an/aus, Knopf „Animation testen“
 - **Chat-Tag** (z.B. `[Auktion]`, `[SlyrexAH]`) und **Währung** (`$`, `€`, ` Coins` …)
 
 In `config/auktionsmod.json` kannst du zusätzlich **alle Chat-Texte** ändern (`msgStart`, `msgNewBid`, `msgEnd` …)

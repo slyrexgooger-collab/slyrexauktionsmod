@@ -19,12 +19,12 @@ import java.util.List;
 public class AuctionSetupScreen extends Screen {
 	private static final int[] DURATIONS = {30, 60, 120, 180, 300, 600, 900, 1800, 3600};
 	private static final int[] SNIPES = {0, 10, 15, 30, 60};
-	private static final int W = 372, H = 232, ROW = 22;
+	private static final int W = 372, H = 210, ROW = 22;
 
 	private final ItemStack stack;
 	private TextFieldWidget startField, incField, buyField;
 	private int durationIdx, snipeIdx;
-	private boolean announce, autoRefund;
+	private boolean announce;
 	private String error;
 	private int x0, y0;
 
@@ -35,7 +35,6 @@ public class AuctionSetupScreen extends Screen {
 		durationIdx = nearest(DURATIONS, c.durationSeconds);
 		snipeIdx = nearest(SNIPES, c.antiSnipeSeconds);
 		announce = c.announceInChat;
-		autoRefund = c.autoRefund;
 	}
 
 	@Override
@@ -69,12 +68,6 @@ public class AuctionSetupScreen extends Screen {
 			b.setMessage(onOff(announce));
 		}).dimensions(cx, y - 1, cw, 20).tooltip(Tooltip.of(Text.literal(
 				"Start, neue Gebote, Countdown und Gewinner automatisch in den Chat schreiben."))).build());
-		y += ROW;
-		addDrawableChild(ButtonWidget.builder(onOff(autoRefund), b -> {
-			autoRefund = !autoRefund;
-			b.setMessage(onOff(autoRefund));
-		}).dimensions(cx, y - 1, cw, 20).tooltip(Tooltip.of(Text.literal(
-				"Ungültige Gebote sofort und Überbotene am Ende automatisch per /pay zurückzahlen. Aus = per Knopf im Menü."))).build());
 
 		int by = y0 + H - 26;
 		addDrawableChild(ButtonWidget.builder(Text.literal("Design"), b -> {
@@ -118,11 +111,10 @@ public class AuctionSetupScreen extends Screen {
 		c.durationSeconds = DURATIONS[durationIdx];
 		c.antiSnipeSeconds = SNIPES[snipeIdx];
 		c.announceInChat = announce;
-		c.autoRefund = autoRefund;
 		c.save();
 
 		AuctionManager.get().start(stack, new AuctionManager.Settings(start, inc, buy, DURATIONS[durationIdx],
-				SNIPES[snipeIdx], announce, autoRefund));
+				SNIPES[snipeIdx], announce));
 		close();
 	}
 
@@ -163,7 +155,7 @@ public class AuctionSetupScreen extends Screen {
 		// Beschriftungen
 		String cur = AuctionConfig.get().currency;
 		String[] labels = {"Startpreis (" + cur + ")", "Mindesterhöhung", "Sofortkauf (" + cur + ")",
-				"Dauer", "Anti-Snipe", "Chat-Ansagen", "Auto-Erstattung"};
+				"Dauer", "Anti-Snipe", "Chat-Ansagen"};
 		int y = y0 + 26;
 		for (String l : labels) {
 			Ui.text(ctx, textRenderer, l, x0 + 136, y + 5, Theme.text());

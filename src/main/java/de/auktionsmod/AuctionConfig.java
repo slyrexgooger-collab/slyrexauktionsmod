@@ -27,7 +27,6 @@ public class AuctionConfig {
 	public int durationSeconds = 300;
 	public int antiSnipeSeconds = 15;
 	public boolean announceInChat = true;
-	public boolean autoRefund = false;
 
 	// ================================================================ Design (im Spiel einstellbar)
 	public String theme = "Gold";
@@ -51,6 +50,9 @@ public class AuctionConfig {
 	/** Wie viele der letzten Gebote im HUD stehen */
 	public int hudLines = 4;
 	public boolean hudShowSeller = true;
+	/** Animation + Sound, wenn jemand die Auktion gewinnt */
+	public boolean winAnimation = true;
+	public boolean winSound = true;
 
 	/** Steht vor jeder Chat-Ansage und jeder Mod-Nachricht */
 	public String chatTag = "[Auktion]";

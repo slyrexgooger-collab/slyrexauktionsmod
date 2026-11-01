@@ -11,7 +11,7 @@ import net.minecraft.text.Text;
 
 /** Design-Einstellungen mit Live-Vorschau des HUD. */
 public class DesignScreen extends Screen {
-	private static final int W = 404, H = 254, ROW = 20;
+	private static final int W = 404, H = 262, ROW = 19;
 	private static final int[] OPACITY = {30, 40, 50, 60, 70, 80, 85, 90, 95, 100};
 	private static final int[] SCALES = {50, 60, 75, 90, 100, 110, 125, 150, 175, 200};
 
@@ -86,6 +86,16 @@ public class DesignScreen extends Screen {
 		}).dimensions(cx + 61, y, 59, 18).tooltip(Tooltip.of(Text.literal("Auktionator im HUD anzeigen"))).build());
 		y += ROW;
 
+		addDrawableChild(ButtonWidget.builder(Text.literal("Anim. " + onOff(c.winAnimation)), b -> {
+			c.winAnimation = !c.winAnimation;
+			b.setMessage(Text.literal("Anim. " + onOff(c.winAnimation)));
+		}).dimensions(cx, y, 59, 18).tooltip(Tooltip.of(Text.literal("Konfetti-Animation, wenn jemand gewinnt"))).build());
+		addDrawableChild(ButtonWidget.builder(Text.literal("Sound " + onOff(c.winSound)), b -> {
+			c.winSound = !c.winSound;
+			b.setMessage(Text.literal("Sound " + onOff(c.winSound)));
+		}).dimensions(cx + 61, y, 59, 18).build());
+		y += ROW;
+
 		tagField = new TextFieldWidget(textRenderer, cx, y, cw, 18, Text.literal("Chat-Tag"));
 		tagField.setMaxLength(24);
 		tagField.setText(c.chatTag);
@@ -113,11 +123,19 @@ public class DesignScreen extends Screen {
 			c.hudOffsetY = d.hudOffsetY;
 			c.showHud = d.showHud;
 			c.hudShowSeller = d.hudShowSeller;
+			c.winAnimation = d.winAnimation;
+			c.winSound = d.winSound;
 			c.chatTag = d.chatTag;
 			c.currency = d.currency;
 			Theme.reload(c);
 			clearAndInit();
 		}).dimensions(x0 + 8, by, 100, 20).build());
+		addDrawableChild(ButtonWidget.builder(Text.literal("Animation testen"), b -> {
+			if (!c.winAnimation) c.winAnimation = true;
+			String me = de.auktionsmod.AuctionManager.myName();
+			WinAnimation.start(me.isEmpty() ? "Alex" : me, 1500, new net.minecraft.item.ItemStack(net.minecraft.item.Items.DIAMOND_SWORD));
+			clearAndInit();
+		}).dimensions(x0 + W / 2 - 55, by, 110, 20).build());
 		addDrawableChild(ButtonWidget.builder(Text.literal("§lFertig"), b -> close())
 				.dimensions(x0 + W - 8 - 100, by, 100, 20).build());
 	}
@@ -160,7 +178,7 @@ public class DesignScreen extends Screen {
 		Ui.textRight(ctx, tr, "Änderungen sind sofort sichtbar", x0 + W - 8, y0 + 8, Theme.muted());
 
 		String[] labels = {"Farbthema", "Akzentfarbe", "Hintergrund", "Deckkraft", "HUD-Position", "HUD-Größe",
-				"HUD-Zeilen", "Anzeigen", "Chat-Tag", "Währung"};
+				"HUD-Zeilen", "Anzeigen", "Gewinn-Effekt", "Chat-Tag", "Währung"};
 		int y = y0 + 24;
 		for (String l : labels) {
 			Ui.text(ctx, tr, l, x0 + 8, y + 5, Theme.text());
@@ -179,10 +197,11 @@ public class DesignScreen extends Screen {
 		AuctionHud.draw(ctx, tr, demo, hx, y0 + 38, scale);
 
 		String tag = c().chatTag == null ? "" : c().chatTag;
-		int chatY = y0 + H - 50;
+		int chatY = y0 + H - 66;
 		Ui.text(ctx, tr, tr.trimToWidth(tag, pw - 12), x0 + 226, chatY, Theme.accent());
 		Ui.text(ctx, tr, tr.trimToWidth("+ Alex bietet 1.500" + c().currency, pw - 12), x0 + 226, chatY + 10, Theme.good());
-		Ui.textCenter(ctx, tr, "Chat-Texte: config/auktionsmod.json", x0 + W / 2, y0 + H - 20, Theme.muted());
+		Ui.textCenter(ctx, tr, tr.trimToWidth("Texte: config/auktionsmod.json", pw - 8), x0 + 220 + pw / 2, y0 + H - 42, Theme.muted());
+		WinAnimation.render(ctx);
 	}
 
 	private static void swatch(DrawContext ctx, int x, int y, int color) {

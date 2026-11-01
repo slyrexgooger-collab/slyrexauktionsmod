@@ -3,6 +3,7 @@ package de.auktionsmod;
 import de.auktionsmod.gui.AuctionHud;
 import de.auktionsmod.gui.AuctionOverviewScreen;
 import de.auktionsmod.gui.AuctionSetupScreen;
+import de.auktionsmod.gui.WinAnimation;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -46,6 +47,7 @@ public class AuktionsMod implements ClientModInitializer {
 				AuctionManager.get().onPlayerChat(message));
 
 		HudElementRegistry.addLast(Identifier.of(MOD_ID, "auction_hud"), AuctionHud::render);
+		HudElementRegistry.addLast(Identifier.of(MOD_ID, "win_animation"), WinAnimation::renderHud);
 
 		LOGGER.info("Auktions-Mod geladen – Taste O öffnet das Menü");
 	}

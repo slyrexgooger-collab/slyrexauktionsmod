@@ -106,7 +106,7 @@ public class AuctionOverviewScreen extends Screen {
 					.tooltip(Tooltip.of(Text.literal("Beendet die Auktion sofort – das Höchstgebot gewinnt."))).build());
 			addDrawableChild(ButtonWidget.builder(Text.literal("§cAbbrechen"), b -> { m.cancel(); clearAndInit(); })
 					.dimensions(bx + bw + 3, by, bw, 20)
-					.tooltip(Tooltip.of(Text.literal("Niemand gewinnt – alle bekommen ihr Geld per /pay zurück."))).build());
+					.tooltip(Tooltip.of(Text.literal("Niemand gewinnt – danach unter Rückzahlungen alle per Knopf erstatten."))).build());
 		} else {
 			addDrawableChild(ButtonWidget.builder(Text.literal("Alle erstatten"), b -> { m.refundAll(); clearAndInit(); })
 					.dimensions(bx, by, bw, 20)
@@ -208,6 +208,8 @@ public class AuctionOverviewScreen extends Screen {
 			case 2 -> drawRefunds(ctx, m, px, right);
 			default -> drawBids(ctx, m, px, right);
 		}
+
+		WinAnimation.render(ctx);
 	}
 
 	private void drawBids(DrawContext ctx, AuctionManager m, int px, int right) {

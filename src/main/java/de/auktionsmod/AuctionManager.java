@@ -1,5 +1,6 @@
 package de.auktionsmod;
 
+import de.auktionsmod.gui.WinAnimation;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
@@ -27,7 +28,7 @@ public final class AuctionManager {
 	public enum Phase { IDLE, RUNNING, ENDED, CANCELLED }
 
 	public record Settings(double startPrice, double minIncrement, double buyNowPrice, int durationSeconds,
-	                       int antiSnipeSeconds, boolean announce, boolean autoRefund) {}
+	                       int antiSnipeSeconds, boolean announce) {}
 
 	private record Outgoing(String text, boolean command) {}
 
@@ -182,8 +183,8 @@ public final class AuctionManager {
 			info(Text.literal("Auktion ohne gültiges Gebot beendet.").formatted(Formatting.YELLOW));
 		}
 		log("ENDE Gewinner=" + (winner == null ? "-" : nameOf(winner) + " " + Money.command(bidOf(winner))));
-		if (settings.autoRefund()) refundAll();
-		else if (totalRefundDue() > 0) {
+		if (winner != null) WinAnimation.start(nameOf(winner), bidOf(winner), item);
+		if (totalRefundDue() > 0) {
 			info(Text.literal("Offene Rückzahlungen: " + Money.fmt(totalRefundDue()) + " – Menü öffnen (O) → Rückzahlungen.").formatted(Formatting.AQUA));
 		}
 		changed();
@@ -197,7 +198,9 @@ public final class AuctionManager {
 		winner = null;
 		announce(AuctionConfig.get().msgCancel, Map.of());
 		log("ABBRUCH");
-		refundAll();
+		if (totalRefundDue() > 0) {
+			info(Text.literal("Zurückzuzahlen: " + Money.fmt(totalRefundDue()) + " – Menü öffnen (O) → Rückzahlungen.").formatted(Formatting.AQUA));
+		}
 		changed();
 	}
 
@@ -306,7 +309,6 @@ public final class AuctionManager {
 
 		if (phase != Phase.RUNNING) {
 			markInvalid(p, "nach Ende");
-			if (settings.autoRefund() || phase == Phase.CANCELLED) refund(k);
 			return;
 		}
 
@@ -321,7 +323,6 @@ public final class AuctionManager {
 		if (!buyNow && p.amount + Money.EPS < need) {
 			markInvalid(p, "unter Mindestgebot");
 			announce(c.msgInvalid, Map.of("player", p.player, "paid", Money.fmt(p.amount), "need", Money.fmt(need)));
-			if (settings.autoRefund()) refund(k);
 			return;
 		}
 
