@@ -18,10 +18,12 @@ jobs:
         shell: bash
         run: |
           chmod +x gradlew
-          ./gradlew probe -Pminecraft_version=26.1 -Pfabric_api_version=0.145.1+26.1 2>&1 | tail -40 || true
-          ./gradlew probe -Pminecraft_version=26.2 -Pfabric_api_version=0.161.0+26.2 2>&1 | tail -40 || true
-          ./gradlew probe -Pminecraft_version=26.3 -Pfabric_api_version=0.165.0+26.3 2>&1 | tail -40 || true
-          cat probe-*.txt > probe.txt || echo "keine Ausgabe" > probe.txt
+          ./gradlew probe -Pminecraft_version=26.1 -Pfabric_api_version=0.145.1+26.1 > g1.log 2>&1 || true
+          ./gradlew probe -Pminecraft_version=26.2 -Pfabric_api_version=0.161.0+26.2 > g2.log 2>&1 || true
+          ./gradlew probe -Pminecraft_version=26.3 -Pfabric_api_version=0.165.0+26.3 > g3.log 2>&1 || true
+          cat probe-*.txt > probe.txt 2>/dev/null || true
+          echo "===== GRADLE LOGS" >> probe.txt
+          tail -60 g1.log g2.log g3.log >> probe.txt
           ls -la probe*.txt
       - uses: softprops/action-gh-release@v2
         with:

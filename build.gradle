@@ -13,7 +13,7 @@ tasks.register('probe') {
 		def out = new StringBuilder()
 		out << "===== MINECRAFT ${project.minecraft_version}\n"
 		def javap = "${System.getProperty('java.home')}/bin/javap"
-		def run = { List args ->
+		def jp = { args ->
 			def p = new ProcessBuilder([javap] + args).redirectErrorStream(true).start()
 			def t = p.inputStream.text
 			p.waitFor()
@@ -34,7 +34,7 @@ tasks.register('probe') {
 			'net.minecraft.client.gui.components.ChatComponent', 'net.minecraft.client.gui.components.Renderable',
 			'net.minecraft.client.gui.components.events.AbstractContainerEventHandler'
 		]
-		full.each { cls -> out << "\n##### ${cls}\n" << run(['-protected', '-cp', cp, cls]) }
+		full.each { cls -> out << "\n##### ${cls}\n" << jp(['-protected', '-cp', cp, cls]) }
 		def greps = [
 			['net.minecraft.client.Minecraft', /(?i)screen|gui|chat|hide/],
 			['net.minecraft.client.Options', /(?i)hide|gui/],
@@ -46,7 +46,7 @@ tasks.register('probe') {
 		]
 		greps.each { g ->
 			out << "\n##### ${g[0]} (grep)\n"
-			run(['-protected', '-cp', cp, g[0]]).eachLine { if (it =~ g[1]) out << it << "\n" }
+			jp(['-protected', '-cp', cp, g[0]]).eachLine { if (it =~ g[1]) out << it << "\n" }
 		}
 		file("probe-${project.minecraft_version}.txt").text = out.toString()
 	}
