@@ -17,15 +17,19 @@ jobs:
       - name: Probe
         shell: bash
         run: |
+          set +e
           chmod +x gradlew
-          ./gradlew probe -Pminecraft_version=26.1 -Pfabric_api_version=0.145.1+26.1 > g1.log 2>&1 || true
-          ./gradlew probe -Pminecraft_version=26.2 -Pfabric_api_version=0.161.0+26.2 > g2.log 2>&1 || true
-          ./gradlew probe -Pminecraft_version=26.3 -Pfabric_api_version=0.165.0+26.3 > g3.log 2>&1 || true
-          cat probe-*.txt > probe.txt 2>/dev/null || true
+          ./gradlew probe -Pminecraft_version=26.1 -Pfabric_api_version=0.145.1+26.1 > g1.log 2>&1
+          ./gradlew probe -Pminecraft_version=26.2 -Pfabric_api_version=0.161.0+26.2 > g2.log 2>&1
+          ./gradlew probe -Pminecraft_version=26.3 -Pfabric_api_version=0.165.0+26.3 > g3.log 2>&1
+          touch probe.txt
+          for f in probe-*.txt; do [ -f "$f" ] && cat "$f" >> probe.txt; done
           echo "===== GRADLE LOGS" >> probe.txt
-          tail -60 g1.log g2.log g3.log >> probe.txt
-          ls -la probe*.txt
+          for f in g1.log g2.log g3.log; do echo "--- $f" >> probe.txt; tail -80 "$f" >> probe.txt; done
+          grep -h -iE "error|exception|what went wrong" g1.log | head -5 | while read -r l; do echo "::error::$l"; done
+          exit 0
       - uses: softprops/action-gh-release@v2
+        if: always()
         with:
           tag_name: probe-26
           name: API-Probe (temporär)
