@@ -10,7 +10,7 @@ import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 
 /** Design-Einstellungen mit Live-Vorschau des HUD. */
-public class DesignScreen extends Screen {
+public class DesignScreen extends AnimatedScreen {
 	private static final int W = 404, H = 262, ROW = 19;
 	private static final int[] OPACITY = {30, 40, 50, 60, 70, 80, 85, 90, 95, 100};
 	private static final int[] SCALES = {50, 60, 75, 90, 100, 110, 125, 150, 175, 200};
@@ -163,16 +163,14 @@ public class DesignScreen extends Screen {
 	}
 
 	@Override
-	public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {
-		super.renderBackground(ctx, mouseX, mouseY, delta);
+	protected void renderPanel(DrawContext ctx, int mouseX, int mouseY, float delta) {
 		Ui.window(ctx, x0, y0, x0 + W, y0 + H);
 		Ui.card(ctx, x0 + 220, y0 + 22, x0 + W - 8, y0 + H - 32);
 		ctx.fill(x0 + 8, y0 + H - 30, x0 + W - 8, y0 + H - 29, Theme.border());
 	}
 
 	@Override
-	public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-		super.render(ctx, mouseX, mouseY, delta);
+	protected void renderContent(DrawContext ctx, int mouseX, int mouseY, float delta) {
 		var tr = textRenderer;
 		Ui.text(ctx, tr, "§lDesign", x0 + 8, y0 + 8, Theme.accent());
 		Ui.textRight(ctx, tr, "Änderungen sind sofort sichtbar", x0 + W - 8, y0 + 8, Theme.muted());
@@ -201,7 +199,6 @@ public class DesignScreen extends Screen {
 		Ui.text(ctx, tr, tr.trimToWidth(tag, pw - 12), x0 + 226, chatY, Theme.accent());
 		Ui.text(ctx, tr, tr.trimToWidth("+ Alex bietet 1.500" + c().currency, pw - 12), x0 + 226, chatY + 10, Theme.good());
 		Ui.textCenter(ctx, tr, tr.trimToWidth("Texte: config/auktionsmod.json", pw - 8), x0 + 220 + pw / 2, y0 + H - 42, Theme.muted());
-		WinAnimation.render(ctx);
 	}
 
 	private static void swatch(DrawContext ctx, int x, int y, int color) {
@@ -227,8 +224,4 @@ public class DesignScreen extends Screen {
 		return on ? "§aAN" : "§cAUS";
 	}
 
-	@Override
-	public boolean shouldPause() {
-		return false;
-	}
 }

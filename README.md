@@ -20,9 +20,12 @@ Die Mod erkennt die Zahlungen, filtert gefälschte Nachrichten (/msg, Flüstern,
    Mit `O` öffnest du die **Übersicht** mit drei Tabs:
    - **Gebote** – alle gültigen Gebote (Zeit, Spieler, Zahlung, Gesamtgebot)
    - **Rangliste** – Platzierung aller Bieter, Status (Führt / Überboten / Gewinner)
-   - **Rückzahlungen** – wem du noch Geld schuldest, mit „Erstatten“-Knopf
+   - **Rückzahlungen** – wem du noch Geld schuldest, inkl. passendem `/pay`-Befehl (nur Info)
 5. Am Ende erscheint eine **Gewinner-Animation** (Konfetti + Banner mit Kopf, Name und Betrag).
-   Dann Item an den Gewinner übergeben, unter „Rückzahlungen“ die Überbotenen per Knopf erstatten, „Neue Auktion“.
+   Danach öffnet sich automatisch der Bildschirm **„Auktion beendet“**: Gewinner und eine Live-Liste,
+   **wer zu spät gezahlt hat** (Zeit, Spieler, Betrag, wie viele Sekunden zu spät). Auch später mit `O` erreichbar.
+6. Item an den Gewinner übergeben, Überbotenen und Zuspätzahlern ihr Geld **selbst** per `/pay` zurückgeben,
+   dann „Neue Auktion“.
 
 ### Regeln
 - Gültige Zahlungen eines Spielers werden **addiert** (= sein Gebot).
@@ -31,7 +34,8 @@ Die Mod erkennt die Zahlungen, filtert gefälschte Nachrichten (/msg, Flüstern,
 - **Ungültige Zahlungen** (zu niedrig oder nach dem Ende) werden **nicht angezeigt und nicht gezählt** –
   sie stehen nur unter „Rückzahlungen“, damit du das Geld zurückgeben kannst.
 - Abbrechen = niemand gewinnt, alle Zahlungen stehen unter „Rückzahlungen“.
-- Rückzahlungen gehen **nur einzeln per „Erstatten“-Knopf** im Tab „Rückzahlungen“ – nie automatisch, kein „Alle erstatten“.
+- Fenster haben leichte Animationen (Hereingleiten, aufleuchtende neue Gebote, pulsierendes Höchstgebot).
+- Die Mod zahlt **nie** Geld aus – es gibt keine Erstattungs-Knöpfe. Unter „Rückzahlungen“ steht nur, wem du wie viel schuldest.
 
 ## Design anpassen
 
@@ -66,7 +70,7 @@ Alle Zahlungen werden in `.minecraft/auktionsmod/zahlungen.log` protokolliert.
   `Steve hat dir 1.500$ gezahlt`, `Du hast 100$ von Steve erhalten`, `$100 has been received from Steve.`,
   `You received $100 from Steve`, `Steve has paid you 100` (jeweils auch mit `[Prefix]` davor).
   Platzhalter: `{PRE}` = optionales `[Prefix]`, `{P}` = Spielername, `{AMT}` = Betrag.
-- `payCommand` – Befehl zum Erstatten (Standard `pay {player} {amount}`).
+- `openEndScreen` – „Auktion beendet“-Bildschirm nach dem Ende automatisch öffnen (`true`/`false`).
 - `chatPrefix` – z.B. `"/g "` wenn Ansagen in einen bestimmten Chat sollen.
 - `announceDelayTicks` – Abstand zwischen Chat-Ansagen (Spam-Schutz, 20 = 1 Sek.).
 - `blockedKeywords` – Wörter, bei denen eine Nachricht nie als Zahlung zählt.

@@ -53,6 +53,8 @@ public class AuctionConfig {
 	/** Animation + Sound, wenn jemand die Auktion gewinnt */
 	public boolean winAnimation = true;
 	public boolean winSound = true;
+	/** Nach der Gewinner-Animation automatisch den Bildschirm "Auktion beendet" oeffnen */
+	public boolean openEndScreen = true;
 
 	/** Steht vor jeder Chat-Ansage und jeder Mod-Nachricht */
 	public String chatTag = "[Auktion]";
@@ -77,8 +79,6 @@ public class AuctionConfig {
 	public String msgCancel = "{tag} Die Auktion wurde abgebrochen. Alle Gebote werden zurückerstattet.";
 
 	// ================================================================ Server
-	/** Befehl ohne "/" fuer Rueckerstattungen. {player} und {amount} werden ersetzt. */
-	public String payCommand = "pay {player} {amount}";
 	/** Wird vor jede Chat-Ansage gesetzt. Beginnt es mit "/", wird ein Befehl gesendet (z.B. "/g "). */
 	public String chatPrefix = "";
 	/** Abstand zwischen zwei Chat-Ansagen in Ticks (20 = 1 Sekunde), schuetzt vor Spam-Kick. */

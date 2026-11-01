@@ -5,7 +5,6 @@ import de.auktionsmod.AuctionManager;
 import de.auktionsmod.Money;
 import de.auktionsmod.Theme;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.gui.widget.TextFieldWidget;
@@ -16,7 +15,7 @@ import net.minecraft.text.Text;
 import java.util.List;
 
 /** Fenster zum Einstellen und Starten einer Auktion fuer das Item in der Hand. */
-public class AuctionSetupScreen extends Screen {
+public class AuctionSetupScreen extends AnimatedScreen {
 	private static final int[] DURATIONS = {30, 60, 120, 180, 300, 600, 900, 1800, 3600};
 	private static final int[] SNIPES = {0, 10, 15, 30, 60};
 	private static final int W = 372, H = 210, ROW = 22;
@@ -119,16 +118,14 @@ public class AuctionSetupScreen extends Screen {
 	}
 
 	@Override
-	public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {
-		super.renderBackground(ctx, mouseX, mouseY, delta);
+	protected void renderPanel(DrawContext ctx, int mouseX, int mouseY, float delta) {
 		Ui.window(ctx, x0, y0, x0 + W, y0 + H);
 		Ui.card(ctx, x0 + 8, y0 + 24, x0 + 128, y0 + H - 32);
 		ctx.fill(x0 + 8, y0 + H - 30, x0 + W - 8, y0 + H - 29, Theme.border());
 	}
 
 	@Override
-	public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-		super.render(ctx, mouseX, mouseY, delta);
+	protected void renderContent(DrawContext ctx, int mouseX, int mouseY, float delta) {
 		String me = AuctionManager.myName();
 
 		// Kopfzeile mit Auktionator
@@ -141,7 +138,9 @@ public class AuctionSetupScreen extends Screen {
 
 		// Item-Karte
 		int cardCx = x0 + 68;
-		Ui.bigItem(ctx, stack, cardCx - 24, y0 + 34, 3f);
+		// Item schwebt leicht auf und ab
+		float bob = (float) Math.sin(System.currentTimeMillis() / 600.0) * 2f;
+		Ui.bigItem(ctx, stack, cardCx - 24, Math.round(y0 + 34 + bob), 3f);
 		int ty = y0 + 90;
 		List<OrderedText> lines = textRenderer.wrapLines(stack.getName(), 110);
 		for (int i = 0; i < Math.min(3, lines.size()); i++) {
@@ -188,8 +187,4 @@ public class AuctionSetupScreen extends Screen {
 		return best;
 	}
 
-	@Override
-	public boolean shouldPause() {
-		return false;
-	}
 }

@@ -49,13 +49,15 @@ public final class AuctionManager {
 	private String seller = "";
 	private long startTimeMs;
 	private long endTimeMs;
+	private long endedAtMs;
+	private long leaderChangedMs;
+	private boolean endScreenPending;
 	private int revision;
 
 	private final List<Payment> payments = new ArrayList<>();
 	private final Map<String, String> names = new LinkedHashMap<>();
 	private final Map<String, Double> bids = new HashMap<>();
 	private final Map<String, Double> invalidMoney = new HashMap<>();
-	private final Map<String, Double> refunded = new HashMap<>();
 	private String leader;
 	private String winner;
 	private final Set<Integer> announcedMarks = new HashSet<>();
@@ -90,7 +92,29 @@ public final class AuctionManager {
 	public String winnerName() { return winner == null ? null : names.get(winner); }
 	public double bidOf(String k) { return bids.getOrDefault(k, 0.0); }
 	public double invalidOf(String k) { return invalidMoney.getOrDefault(k, 0.0); }
-	public double refundedOf(String k) { return refunded.getOrDefault(k, 0.0); }
+	public long leaderChangedMs() { return leaderChangedMs; }
+
+	public boolean endScreenPending() { return endScreenPending; }
+
+	/** Einmalig true nach dem Ende -> "Auktion beendet"-Bildschirm oeffnen. */
+	public boolean consumeEndScreen() {
+		boolean b = endScreenPending;
+		endScreenPending = false;
+		return b;
+	}
+
+	/** Zahlungen, die erst nach dem Ende kamen (neueste zuerst). */
+	public List<Payment> latePayments() {
+		List<Payment> out = new ArrayList<>();
+		for (int i = payments.size() - 1; i >= 0; i--) if (payments.get(i).late) out.add(payments.get(i));
+		return out;
+	}
+
+	public double totalLate() {
+		double s = 0;
+		for (Payment p : payments) if (p.late) s += p.amount;
+		return s;
+	}
 	public String nameOf(String k) { return names.getOrDefault(k, k); }
 	public boolean isWinner(String k) { return k.equals(winner); }
 	public boolean isLeader(String k) { return k.equals(leader); }
@@ -125,14 +149,14 @@ public final class AuctionManager {
 	/** Spieler, denen etwas zusteht oder schon erstattet wurde. */
 	public List<String> refundList() {
 		List<String> list = new ArrayList<>();
-		for (String k : names.keySet()) if (refundDue(k) > 0 || refundedOf(k) > 0) list.add(k);
+		for (String k : names.keySet()) if (refundDue(k) > 0) list.add(k);
 		list.sort((a, b) -> Double.compare(refundDue(b), refundDue(a)));
 		return list;
 	}
 
-	/** Offener Rueckzahlungsbetrag. Ungueltige Zahlungen sind sofort erstattbar, Gebote erst nach dem Ende. */
+	/** Was du diesem Spieler zurueckgeben musst (Info – die Mod zahlt nichts selbst aus). */
 	public double refundDue(String k) {
-		double due = invalidOf(k) - refundedOf(k);
+		double due = invalidOf(k);
 		if (phase == Phase.ENDED || phase == Phase.CANCELLED) {
 			due += k.equals(winner) ? 0 : bidOf(k);
 		}
@@ -171,6 +195,8 @@ public final class AuctionManager {
 
 	private void end() {
 		phase = Phase.ENDED;
+		endedAtMs = System.currentTimeMillis();
+		endScreenPending = true;
 		winner = leader;
 		AuctionConfig c = AuctionConfig.get();
 		if (winner != null) {
@@ -185,7 +211,7 @@ public final class AuctionManager {
 		log("ENDE Gewinner=" + (winner == null ? "-" : nameOf(winner) + " " + Money.command(bidOf(winner))));
 		if (winner != null) WinAnimation.start(nameOf(winner), bidOf(winner), item);
 		if (totalRefundDue() > 0) {
-			info(Text.literal("Offene Rückzahlungen: " + Money.fmt(totalRefundDue()) + " – Menü öffnen (O) → Rückzahlungen.").formatted(Formatting.AQUA));
+			info(Text.literal("Zurückzuzahlen (selbst per /pay): " + Money.fmt(totalRefundDue()) + " – Details mit O.").formatted(Formatting.AQUA));
 		}
 		changed();
 	}
@@ -194,12 +220,14 @@ public final class AuctionManager {
 	public void cancel() {
 		if (phase != Phase.RUNNING) return;
 		phase = Phase.CANCELLED;
+		endedAtMs = System.currentTimeMillis();
+		endScreenPending = true;
 		leader = null;
 		winner = null;
 		announce(AuctionConfig.get().msgCancel, Map.of());
 		log("ABBRUCH");
 		if (totalRefundDue() > 0) {
-			info(Text.literal("Zurückzuzahlen: " + Money.fmt(totalRefundDue()) + " – Menü öffnen (O) → Rückzahlungen.").formatted(Formatting.AQUA));
+			info(Text.literal("Zurückzuzahlen (selbst per /pay): " + Money.fmt(totalRefundDue()) + " – Details mit O.").formatted(Formatting.AQUA));
 		}
 		changed();
 	}
@@ -211,24 +239,11 @@ public final class AuctionManager {
 		names.clear();
 		bids.clear();
 		invalidMoney.clear();
-		refunded.clear();
+		endScreenPending = false;
 		leader = null;
 		winner = null;
 		announcedMarks.clear();
-		outbox.removeIf(o -> !o.command()); // offene Ansagen verwerfen, Rueckzahlungen behalten
-		changed();
-	}
-
-	public void refund(String k) {
-		double due = refundDue(k);
-		if (due <= 0) return;
-		String name = nameOf(k);
-		if (!PaymentDetector.VALID_NAME.matcher(name).matches()) return; // Schutz vor Befehls-Injection
-		String cmd = AuctionConfig.get().payCommand.replace("{player}", name).replace("{amount}", Money.command(due));
-		refunded.merge(k, due, Double::sum);
-		outbox.add(new Outgoing(cmd, true));
-		info(Text.literal("Erstatte " + Money.fmt(due) + " an " + name).formatted(Formatting.AQUA));
-		log("ERSTATTUNG " + name + " " + Money.command(due));
+		outbox.clear();
 		changed();
 	}
 
@@ -304,7 +319,9 @@ public final class AuctionManager {
 		AuctionConfig c = AuctionConfig.get();
 
 		if (phase != Phase.RUNNING) {
-			markInvalid(p, "nach Ende");
+			p.late = true;
+			p.secondsAfterEnd = Math.max(0, (System.currentTimeMillis() - endedAtMs) / 1000);
+			markInvalid(p, "zu spät, " + p.secondsAfterEnd + " Sek. nach Ende");
 			return;
 		}
 
@@ -330,6 +347,7 @@ public final class AuctionManager {
 
 		boolean wasLeader = k.equals(leader);
 		leader = k;
+		if (!wasLeader) leaderChangedMs = System.currentTimeMillis();
 		if (buyNow) {
 			announce(c.msgBuyNow, Map.of("player", p.player, "amount", Money.fmt(total)));
 			end();
@@ -343,7 +361,7 @@ public final class AuctionManager {
 	private void markInvalid(Payment p, String why) {
 		p.valid = false;
 		invalidMoney.merge(p.key(), p.amount, Double::sum);
-		info(Text.literal("Ungültig (" + why + "): " + p.player + " " + Money.fmt(p.amount) + " – wird erstattet.").formatted(Formatting.GRAY));
+		info(Text.literal("Ungültig (" + why + "): " + p.player + " " + Money.fmt(p.amount) + " – nicht gezählt.").formatted(Formatting.GRAY));
 	}
 
 	private void antiSnipe() {

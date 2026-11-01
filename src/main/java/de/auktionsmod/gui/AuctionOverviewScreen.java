@@ -5,22 +5,23 @@ import de.auktionsmod.Money;
 import de.auktionsmod.Payment;
 import de.auktionsmod.Theme;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
 
 import java.util.List;
 
-/** Uebersicht der laufenden/beendeten Auktion: Gebote, Rangliste, Rueckzahlungen. */
-public class AuctionOverviewScreen extends Screen {
+/** Uebersicht der laufenden/beendeten Auktion: Gebote, Rangliste, offene Rueckzahlungen (nur Info). */
+public class AuctionOverviewScreen extends AnimatedScreen {
 	private static final int ROW = 15;
 	private static final String[] TABS = {"Gebote", "Rangliste", "Rückzahlungen"};
+	private static final long FLASH_MS = 1600;
 
 	private static int tab = 0;
 	private int page;
 	private int seenRevision = -1;
 	private int x0, y0, w, h, listTop, rows;
+	private float tabX = -1;
 
 	public AuctionOverviewScreen() {
 		super(Text.literal("Auktion"));
@@ -80,48 +81,31 @@ public class AuctionOverviewScreen extends Screen {
 					.dimensions(x0 + w - 8 - 16, py, 16, 16).build()).active = page < pages - 1;
 		}
 
-		// Erstatten-Knoepfe in Rangliste / Rueckzahlungen
-		if (tab == 1 || tab == 2) {
-			List<String> keys = tab == 1 ? m.ranking() : m.refundList();
-			for (int i = 0; i < rows; i++) {
-				int idx = page * rows + i;
-				if (idx >= keys.size()) break;
-				String k = keys.get(idx);
-				double due = m.refundDue(k);
-				if (due > 0) {
-					addDrawableChild(ButtonWidget.builder(Text.literal("Erstatten"), b -> m.refund(k))
-							.dimensions(x0 + w - 8 - 58, listTop + i * ROW + 1, 54, 13)
-							.tooltip(Tooltip.of(Text.literal("Sendet /pay " + m.nameOf(k) + " " + Money.command(due)))).build());
-				}
-			}
-		}
-
-		// Untere Knoepfe (Rueckzahlungen nur einzeln im Tab "Rückzahlungen")
+		// Untere Knoepfe
 		int by = y0 + h - 26;
-		boolean running = m.phase() == AuctionManager.Phase.RUNNING;
-		int count = running ? 4 : 3;
-		int bw = (w - 16 - 3 * (count - 1)) / count;
+		int bw = (w - 16 - 9) / 4;
 		int bx = x0 + 8;
-		if (running) {
+		if (m.phase() == AuctionManager.Phase.RUNNING) {
 			addDrawableChild(ButtonWidget.builder(Text.literal("Jetzt beenden"), b -> { m.endNow(); clearAndInit(); })
 					.dimensions(bx, by, bw, 20)
 					.tooltip(Tooltip.of(Text.literal("Beendet die Auktion sofort – das Höchstgebot gewinnt."))).build());
-			bx += bw + 3;
 			addDrawableChild(ButtonWidget.builder(Text.literal("§cAbbrechen"), b -> { m.cancel(); clearAndInit(); })
-					.dimensions(bx, by, bw, 20)
-					.tooltip(Tooltip.of(Text.literal("Niemand gewinnt – danach unter Rückzahlungen einzeln erstatten."))).build());
+					.dimensions(bx + bw + 3, by, bw, 20)
+					.tooltip(Tooltip.of(Text.literal("Niemand gewinnt."))).build());
 		} else {
 			addDrawableChild(ButtonWidget.builder(Text.literal("Neue Auktion"), b -> { m.clear(); close(); })
 					.dimensions(bx, by, bw, 20)
 					.tooltip(Tooltip.of(Text.literal("Schließt diese Auktion ab. Danach mit einem Item in der Hand O drücken."))).build());
+			addDrawableChild(ButtonWidget.builder(Text.literal("Zu spät (" + m.latePayments().size() + ")"), b -> {
+				if (client != null) client.setScreen(new AuctionEndScreen());
+			}).dimensions(bx + bw + 3, by, bw, 20)
+					.tooltip(Tooltip.of(Text.literal("Wer nach dem Ende noch gezahlt hat"))).build());
 		}
-		bx += bw + 3;
 		addDrawableChild(ButtonWidget.builder(Text.literal("Design"), b -> {
 			if (client != null) client.setScreen(new DesignScreen(this));
-		}).dimensions(bx, by, bw, 20).build());
-		bx += bw + 3;
+		}).dimensions(bx + (bw + 3) * 2, by, bw, 20).build());
 		addDrawableChild(ButtonWidget.builder(Text.literal("Schließen"), b -> close())
-				.dimensions(bx, by, bw, 20).build());
+				.dimensions(bx + (bw + 3) * 3, by, bw, 20).build());
 	}
 
 	@Override
@@ -135,33 +119,61 @@ public class AuctionOverviewScreen extends Screen {
 	}
 
 	@Override
-	public void renderBackground(DrawContext ctx, int mouseX, int mouseY, float delta) {
-		super.renderBackground(ctx, mouseX, mouseY, delta);
+	protected void renderPanel(DrawContext ctx, int mouseX, int mouseY, float delta) {
+		AuctionManager m = m();
 		Ui.window(ctx, x0, y0, x0 + w, y0 + h);
 		Ui.card(ctx, x0 + 6, y0 + 8, x0 + 46, y0 + 48);
-		Ui.card(ctx, x0 + w - 156, y0 + 8, x0 + w - 6, y0 + 48);
+
+		// Hoechstgebot-Karte – pulsiert kurz bei neuem Fuehrenden
+		int lx1 = x0 + w - 156, lx2 = x0 + w - 6;
+		long since = System.currentTimeMillis() - m.leaderChangedMs();
+		if (m.leaderChangedMs() > 0 && since < 1800) {
+			float f = 1 - since / 1800f;
+			int a = (int) (f * (120 + 100 * pulse(400)));
+			ctx.fill(lx1 - 2, y0 + 6, lx2 + 2, y0 + 50, Theme.accent(Math.max(0, Math.min(255, a))));
+		}
+		ctx.fill(lx1, y0 + 8, lx2, y0 + 48, 0xFF000000 | (Theme.background() & 0xFFFFFF)); // Glow nicht durchscheinen lassen
+		Ui.card(ctx, lx1, y0 + 8, lx2, y0 + 48);
+
+		// Liste
 		Ui.card(ctx, x0 + 6, listTop - 13, x0 + w - 6, listTop + rows * ROW + 2);
 		ctx.fill(x0 + 6, listTop - 2, x0 + w - 6, listTop - 1, Theme.border());
-		// Zeilen-Hover + Streifen
+		List<Payment> bids = tab == 0 ? m.validBids() : List.of();
 		int n = Math.min(rows, entryCount() - page * rows);
+		long now = System.currentTimeMillis();
 		for (int i = 0; i < n; i++) {
 			int ry = listTop + i * ROW;
 			boolean hover = mouseX >= x0 + 6 && mouseX < x0 + w - 6 && mouseY >= ry && mouseY < ry + ROW;
 			if (hover) ctx.fill(x0 + 7, ry, x0 + w - 7, ry + ROW, Theme.cardHover());
 			else if (i % 2 == 1) ctx.fill(x0 + 7, ry, x0 + w - 7, ry + ROW, 0x18FFFFFF);
+			// Neue Gebote leuchten kurz auf
+			if (tab == 0) {
+				int idx = page * rows + i;
+				if (idx < bids.size()) {
+					long age = now - bids.get(idx).createdMs;
+					if (age < FLASH_MS) {
+						int a = (int) (110 * (1 - age / (float) FLASH_MS));
+						ctx.fill(x0 + 7, ry, x0 + w - 7, ry + ROW, Theme.accent(a));
+					}
+				}
+			}
 		}
-		// aktiver Tab unterstrichen
-		ctx.fill(x0 + 8 + tab * 98, y0 + 70, x0 + 8 + tab * 98 + 96, y0 + 72, Theme.accent());
+
+		// Tab-Markierung gleitet
+		float target = x0 + 8 + tab * 98;
+		if (tabX < 0) tabX = target;
+		tabX = approach(tabX, target, 0.25f);
+		ctx.fill(Math.round(tabX), y0 + 70, Math.round(tabX) + 96, y0 + 72, Theme.accent());
 	}
 
 	@Override
-	public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-		super.render(ctx, mouseX, mouseY, delta);
+	protected void renderContent(DrawContext ctx, int mouseX, int mouseY, float delta) {
 		AuctionManager m = m();
 		var tr = textRenderer;
 
 		// ---- Kopf: Item, Auktionator, Zeit
-		Ui.bigItem(ctx, m.item(), x0 + 10, y0 + 12, 2f);
+		float bob = (float) Math.sin(System.currentTimeMillis() / 500.0) * 1.2f;
+		Ui.bigItem(ctx, m.item(), x0 + 10, Math.round(y0 + 12 + bob), 2f);
 		String title = (m.item().getCount() > 1 ? m.item().getCount() + "x " : "") + m.item().getName().getString();
 		int midW = w - 156 - 56 - 8;
 		Ui.text(ctx, tr, "§l" + tr.trimToWidth(title, midW - 8), x0 + 52, y0 + 9, Theme.accent());
@@ -172,7 +184,11 @@ public class AuctionOverviewScreen extends Screen {
 		String state;
 		int stateColor;
 		switch (m.phase()) {
-			case RUNNING -> { state = "Läuft – noch " + Money.time(m.remainingSeconds()); stateColor = m.remainingSeconds() <= 10 ? Theme.bad() : Theme.good(); }
+			case RUNNING -> {
+				long rem = m.remainingSeconds();
+				state = "Läuft – noch " + Money.time(rem);
+				stateColor = rem <= 10 ? (pulse(500) > 0.5f ? Theme.bad() : Theme.text()) : Theme.good();
+			}
 			case ENDED -> { state = "Beendet"; stateColor = Theme.accent(); }
 			case CANCELLED -> { state = "Abgebrochen"; stateColor = Theme.bad(); }
 			default -> { state = ""; stateColor = Theme.text(); }
@@ -209,8 +225,6 @@ public class AuctionOverviewScreen extends Screen {
 			case 2 -> drawRefunds(ctx, m, px, right);
 			default -> drawBids(ctx, m, px, right);
 		}
-
-		WinAnimation.render(ctx);
 	}
 
 	private void drawBids(DrawContext ctx, AuctionManager m, int px, int right) {
@@ -226,22 +240,26 @@ public class AuctionOverviewScreen extends Screen {
 			Ui.text(ctx, tr, "Noch keine gültigen Gebote.", px, listTop + 4, Theme.muted());
 			return;
 		}
+		long now = System.currentTimeMillis();
 		for (int i = 0; i < rows; i++) {
 			int idx = page * rows + i;
 			if (idx >= list.size()) break;
 			Payment p = list.get(idx);
+			// neue Zeilen gleiten von rechts herein
+			long age = now - p.createdMs;
+			int slide = age < 300 ? Math.round((1 - easeOutCubic(age / 300f)) * 24) : 0;
 			int ry = listTop + i * ROW + 4;
-			Ui.text(ctx, tr, p.time, c1, ry, Theme.muted());
-			Ui.head(ctx, p.player, c2, ry - 1, 9);
-			Ui.text(ctx, tr, tr.trimToWidth(p.player, c3 - c2 - 20), c2 + 12, ry, Theme.text());
-			Ui.text(ctx, tr, "+" + Money.fmt(p.amount), c3, ry, Theme.muted());
+			Ui.text(ctx, tr, p.time, c1 + slide, ry, Theme.muted());
+			Ui.head(ctx, p.player, c2 + slide, ry - 1, 9);
+			Ui.text(ctx, tr, tr.trimToWidth(p.player, c3 - c2 - 20), c2 + 12 + slide, ry, Theme.text());
+			Ui.text(ctx, tr, "+" + Money.fmt(p.amount), c3 + slide, ry, Theme.muted());
 			Ui.textRight(ctx, tr, Money.fmt(p.totalAfter), c4, ry, idx == 0 ? Theme.good() : Theme.text());
 		}
 	}
 
 	private void drawRanking(DrawContext ctx, AuctionManager m, int px, int right) {
 		var tr = textRenderer;
-		int cGebot = right - 170, cStatus = right - 110;
+		int cGebot = right - 170, cStatus = right - 90;
 		Ui.text(ctx, tr, "#", px, listTop - 11, Theme.muted());
 		Ui.text(ctx, tr, "Spieler", px + 18, listTop - 11, Theme.muted());
 		Ui.text(ctx, tr, "Gebot", cGebot, listTop - 11, Theme.muted());
@@ -266,7 +284,6 @@ public class AuctionOverviewScreen extends Screen {
 			int color;
 			if (m.isWinner(k)) { status = "★ Gewinner"; color = Theme.good(); }
 			else if (m.isLeader(k)) { status = "★ Führt"; color = Theme.good(); }
-			else if (m.refundDue(k) <= 0 && m.refundedOf(k) > 0) { status = "Erstattet"; color = Theme.accent(); }
 			else { status = "Überboten"; color = Theme.muted(); }
 			Ui.text(ctx, tr, status, cStatus, ry, color);
 		}
@@ -274,15 +291,15 @@ public class AuctionOverviewScreen extends Screen {
 
 	private void drawRefunds(DrawContext ctx, AuctionManager m, int px, int right) {
 		var tr = textRenderer;
-		int cOpen = right - 190, cDone = right - 125;
+		int cAmount = right - 200, cCmd = right - 130;
 		Ui.text(ctx, tr, "Spieler", px, listTop - 11, Theme.muted());
-		Ui.text(ctx, tr, "Offen", cOpen, listTop - 11, Theme.muted());
-		Ui.text(ctx, tr, "Erstattet", cDone, listTop - 11, Theme.muted());
+		Ui.text(ctx, tr, "Betrag", cAmount, listTop - 11, Theme.muted());
+		Ui.text(ctx, tr, "Selbst zurückzahlen mit", cCmd, listTop - 11, Theme.muted());
 
 		List<String> list = m.refundList();
 		if (list.isEmpty()) {
 			Ui.text(ctx, tr, m.phase() == AuctionManager.Phase.RUNNING
-					? "Nichts offen. Überbotene werden nach dem Ende hier gelistet." : "Keine Rückzahlungen nötig.", px, listTop + 4, Theme.muted());
+					? "Nichts offen. Überbotene stehen nach dem Ende hier." : "Niemandem muss etwas zurückgezahlt werden.", px, listTop + 4, Theme.muted());
 			return;
 		}
 		for (int i = 0; i < rows; i++) {
@@ -291,17 +308,10 @@ public class AuctionOverviewScreen extends Screen {
 			String k = list.get(idx);
 			int ry = listTop + i * ROW + 4;
 			Ui.head(ctx, m.nameOf(k), px, ry - 1, 9);
-			Ui.text(ctx, tr, tr.trimToWidth(m.nameOf(k), cOpen - px - 18), px + 12, ry, Theme.text());
+			Ui.text(ctx, tr, tr.trimToWidth(m.nameOf(k), cAmount - px - 18), px + 12, ry, Theme.text());
 			double due = m.refundDue(k);
-			Ui.text(ctx, tr, due > 0 ? Money.fmt(due) : "–", cOpen, ry, due > 0 ? Theme.bad() : Theme.muted());
-			double done = m.refundedOf(k);
-			Ui.text(ctx, tr, done > 0 ? Money.fmt(done) : "–", cDone, ry, done > 0 ? Theme.good() : Theme.muted());
-			if (due <= 0) Ui.textRight(ctx, tr, "✔", right - 4, ry, Theme.good());
+			Ui.text(ctx, tr, Money.fmt(due), cAmount, ry, Theme.bad());
+			Ui.text(ctx, tr, tr.trimToWidth("/pay " + m.nameOf(k) + " " + Money.command(due), right - cCmd), cCmd, ry, Theme.muted());
 		}
-	}
-
-	@Override
-	public boolean shouldPause() {
-		return false;
 	}
 }

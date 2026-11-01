@@ -1,5 +1,6 @@
 package de.auktionsmod;
 
+import de.auktionsmod.gui.AuctionEndScreen;
 import de.auktionsmod.gui.AuctionHud;
 import de.auktionsmod.gui.AuctionOverviewScreen;
 import de.auktionsmod.gui.AuctionSetupScreen;
@@ -36,7 +37,14 @@ public class AuktionsMod implements ClientModInitializer {
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (openKey.wasPressed()) openMenu(client);
-			AuctionManager.get().tick(client);
+			AuctionManager m = AuctionManager.get();
+			m.tick(client);
+			// Nach der Gewinner-Animation den "Auktion beendet"-Bildschirm zeigen
+			if (m.endScreenPending() && !WinAnimation.active()
+					&& (client.currentScreen == null || client.currentScreen instanceof AuctionOverviewScreen)) {
+				m.consumeEndScreen();
+				if (AuctionConfig.get().openEndScreen && client.player != null) client.setScreen(new AuctionEndScreen());
+			}
 		});
 
 		// Nur SYSTEM-Nachrichten des Servers koennen echte Zahlungen sein.
@@ -56,7 +64,8 @@ public class AuktionsMod implements ClientModInitializer {
 		if (client.player == null) return;
 		AuctionManager m = AuctionManager.get();
 		if (m.hasSession()) {
-			client.setScreen(new AuctionOverviewScreen());
+			boolean over = m.phase() == AuctionManager.Phase.ENDED || m.phase() == AuctionManager.Phase.CANCELLED;
+			client.setScreen(over ? new AuctionEndScreen() : new AuctionOverviewScreen());
 			return;
 		}
 		ItemStack held = client.player.getMainHandStack();

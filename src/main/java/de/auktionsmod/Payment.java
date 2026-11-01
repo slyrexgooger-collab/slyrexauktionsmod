@@ -13,6 +13,12 @@ public class Payment {
 	public boolean valid;
 	/** Gesamtgebot des Spielers nach dieser Zahlung (nur bei gueltigen) */
 	public double totalAfter;
+	/** Erst nach dem Ende der Auktion eingegangen */
+	public boolean late;
+	/** Sekunden nach dem Ende (nur bei late) */
+	public long secondsAfterEnd;
+	/** Eingangszeitpunkt, fuer Animationen */
+	public final long createdMs = System.currentTimeMillis();
 
 	public Payment(String player, double amount) {
 		this.player = player;
