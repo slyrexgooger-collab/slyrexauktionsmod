@@ -19,7 +19,12 @@ jobs:
         run: |
           chmod +x gradlew
           set -o pipefail
-          ./gradlew build 2>&1 | tee build.log
+          for i in 1 2 3; do
+            ./gradlew build 2>&1 | tee build.log && exit 0
+            grep -q "status code 429\|Could not resolve" build.log || exit 1
+            echo "Netzwerkproblem – neuer Versuch in $((i*30)) Sekunden"; sleep $((i*30))
+          done
+          exit 1
       - name: Fehlerprotokoll veröffentlichen
         if: failure()
         uses: softprops/action-gh-release@v2
@@ -82,7 +87,13 @@ jobs:
         run: |
           chmod +x gradlew
           set -o pipefail
-          ./gradlew build -Pminecraft_version=${{ matrix.mc }} -Pfabric_api_version=${{ matrix.fapi }} 2>&1 | tee build.log
+          # bis zu 3 Versuche (Maven Central blockt manchmal kurz mit "429 Too Many Requests")
+          for i in 1 2 3; do
+            ./gradlew build -Pminecraft_version=${{ matrix.mc }} -Pfabric_api_version=${{ matrix.fapi }} 2>&1 | tee build.log && exit 0
+            grep -q "status code 429\|Could not resolve" build.log || exit 1
+            echo "Netzwerkproblem – neuer Versuch in $((i*30)) Sekunden"; sleep $((i*30))
+          done
+          exit 1
       - name: Fehler anzeigen
         if: failure()
         shell: bash
