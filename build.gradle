@@ -14,7 +14,7 @@ tasks.register('probe') {
 		out << "===== MINECRAFT ${project.minecraft_version}\n"
 		def javap = "${System.getProperty('java.home')}/bin/javap"
 		def jp = { args ->
-			def p = new ProcessBuilder([javap] + args).redirectErrorStream(true).start()
+			def p = new ProcessBuilder(([javap] + args).collect { it.toString() }).redirectErrorStream(true).start()
 			def t = p.inputStream.text
 			p.waitFor()
 			t
